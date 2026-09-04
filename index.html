@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torre de Controle</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg: #F6F3EC; --surface: #FFFFFF; --surface-2: #FBF8F1; --border: #E4DDCB;
+    --text: #211E16; --text-muted: #78715D; --text-faint: #A79E86;
+    --accent: #0F7A73; --accent-soft: #E0EFEA; --accent-strong: #0A5A55;
+    --warn: #B5732A; --warn-soft: #F5E7D5; --off: #A79E86; --off-soft: #EFEAE0;
+    --danger: #B23A3A; --danger-soft: #F5DEDE;
+    --shadow: 0 1px 2px rgba(33,30,22,0.05), 0 8px 24px -12px rgba(33,30,22,0.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161A; --surface:#1C1F24; --surface-2:#20242A; --border:#2C3038;
+      --text:#ECE8DD; --text-muted:#9A9A8C; --text-faint:#6E6E63;
+      --accent:#35B8A9; --accent-soft:#1C2E2C; --accent-strong:#5FD1C3;
+      --warn:#E0A458; --warn-soft:#2E271B; --off:#6E6E63; --off-soft:#23262B;
+      --danger:#E07777; --danger-soft:#3A2323;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14161A; --surface:#1C1F24; --surface-2:#20242A; --border:#2C3038;
+    --text:#ECE8DD; --text-muted:#9A9A8C; --text-faint:#6E6E63;
+    --accent:#35B8A9; --accent-soft:#1C2E2C; --accent-strong:#5FD1C3;
+    --warn:#E0A458; --warn-soft:#2E271B; --off:#6E6E63; --off-soft:#23262B;
+    --danger:#E07777; --danger-soft:#3A2323;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.5);
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',system-ui,sans-serif; line-height:1.5; }
+  h1,h2,h3{ font-family:'Zilla Slab',Georgia,serif; margin:0; text-wrap:balance; }
+  .mono{ font-family:'IBM Plex Mono',ui-monospace,monospace; }
+  [hidden]{ display:none !important; }
+
+  /* ---- login screen ---- */
+  #login-view{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .login-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:36px 32px; width:100%; max-width:360px; }
+  .login-card .status-dot{ width:10px; height:10px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); display:inline-block; margin-bottom:14px; }
+  .login-card h1{ font-size:1.4rem; font-weight:600; }
+  .login-card p.sub{ color:var(--text-muted); font-size:0.88rem; margin:6px 0 24px; }
+  label{ display:block; font-size:0.78rem; color:var(--text-muted); margin-bottom:6px; }
+  input[type="text"], input[type="password"]{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--text); font-size:0.95rem; margin-bottom:16px;
+    font-family:'IBM Plex Sans',sans-serif;
+  }
+  input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  button.primary{
+    width:100%; padding:11px; border-radius:8px; border:none; background:var(--accent);
+    color:#fff; font-weight:600; font-size:0.95rem; cursor:pointer;
+  }
+  button.primary:hover{ background:var(--accent-strong); }
+  .error-msg{ color:var(--danger); font-size:0.84rem; margin:-8px 0 14px; min-height:1em; }
+
+  /* ---- dashboard shell ---- */
+  .wrap{ max-width:920px; margin:0 auto; padding:40px 20px 80px; }
+  .status-bar{ display:flex; align-items:center; justify-content:space-between; gap:16px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 22px; box-shadow:var(--shadow); flex-wrap:wrap; }
+  .status-bar .id{ display:flex; align-items:center; gap:14px; }
+  .status-dot{ width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); flex-shrink:0; }
+  .status-bar h1{ font-size:1.35rem; font-weight:600; }
+  .status-bar .subtitle{ color:var(--text-muted); font-size:0.88rem; margin-top:2px; }
+  .status-meta{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
+  .status-meta div{ text-align:right; }
+  .status-meta .k{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); }
+  .status-meta .v{ font-size:0.92rem; font-weight:500; margin-top:2px; }
+  .logout-link{ background:none; border:none; color:var(--text-muted); font-size:0.8rem; cursor:pointer; text-decoration:underline; padding:0; }
+
+  .section{ margin-top:44px; }
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .section-head h2{ font-size:1.15rem; font-weight:600; }
+  .section-head p{ color:var(--text-muted); font-size:0.86rem; margin:4px 0 0; max-width:60ch; }
+
+  .note{ background:var(--surface-2); border:1px dashed var(--border); border-radius:12px; padding:16px 20px; font-size:0.86rem; color:var(--text-muted); margin-top:18px; }
+  .note strong{ color:var(--text); }
+
+  .routines{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
+  .routine{ display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:16px; padding:16px 20px; border-bottom:1px solid var(--border); }
+  .routine:last-child{ border-bottom:none; }
+  .routine .glyph{ width:38px; height:38px; border-radius:9px; background:var(--surface-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:500; color:var(--text-muted); }
+  .routine .info h3{ font-size:0.95rem; font-weight:600; }
+  .routine .info p{ color:var(--text-muted); font-size:0.83rem; margin:3px 0 0; }
+  .routine .schedule{ font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--text-muted); text-align:right; white-space:nowrap; }
+  .routine .schedule .state{ display:block; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-top:3px; }
+  .routine .schedule .state.on{ color:var(--accent); }
+  .routine .schedule .state.off{ color:var(--off); }
+
+  .switch{ position:relative; width:44px; height:25px; flex-shrink:0; border-radius:999px; border:none; cursor:pointer; background:var(--off-soft); transition:background .15s ease; padding:0; }
+  .switch::after{ content:''; position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s ease; }
+  .switch.active{ background:var(--accent); }
+  .switch.active::after{ transform:translateX(19px); }
+  .switch:disabled{ opacity:.5; cursor:wait; }
+  .switch:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .bridge-pill{ font-size:0.66rem; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:20px; margin-top:6px; display:inline-block; }
+  .bridge-pill.live{ background:var(--accent-soft); color:var(--accent-strong); }
+  .bridge-pill.pending{ background:var(--warn-soft); color:var(--warn); }
+
+  .log{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:6px 20px; }
+  .log-item{ display:grid; grid-template-columns:150px 1fr auto; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); font-size:0.84rem; }
+  .log-item:last-child{ border-bottom:none; }
+  .log-item .when{ font-family:'IBM Plex Mono',monospace; color:var(--text-faint); font-size:0.76rem; }
+  .log-item .who{ color:var(--text-muted); font-size:0.76rem; }
+  .empty{ color:var(--text-faint); font-size:0.86rem; padding:16px 0; }
+
+  footer{ margin-top:56px; padding-top:18px; border-top:1px solid var(--border); font-size:0.78rem; color:var(--text-faint); }
+
+  @media (max-width:560px){
+    .status-bar{ flex-direction:column; align-items:flex-start; }
+    .routine{ grid-template-columns:auto 1fr auto; }
+    .routine .schedule{ grid-column:2/4; text-align:left; }
+    .log-item{ grid-template-columns:1fr; gap:2px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login-view">
+  <div class="login-card">
+    <span class="status-dot" aria-hidden="true"></span>
+    <h1>Torre de Controle</h1>
+    <p class="sub">Entre para acompanhar e ativar as rotinas da Alice.</p>
+    <form id="login-form">
+      <label for="username">Usuário</label>
+      <input type="text" id="username" autocomplete="username" required>
+      <label for="password">Senha</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+      <div class="error-msg" id="login-error"></div>
+      <button type="submit" class="primary" id="login-btn">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div class="wrap" id="dashboard-view" hidden>
+
+  <div class="status-bar">
+    <div class="id">
+      <span class="status-dot" aria-hidden="true"></span>
+      <div>
+        <h1>Agente IA · Telegram</h1>
+        <div class="subtitle">Conectado ao cérebro principal de IA da empresa</div>
+      </div>
+    </div>
+    <div class="status-meta">
+      <div>
+        <div class="k">Rotinas ligadas</div>
+        <div class="v mono" id="onCount">—</div>
+      </div>
+      <div>
+        <div class="k">Sessão</div>
+        <div class="v" id="whoami">—</div>
+      </div>
+      <div><button class="logout-link" id="logout-btn">sair</button></div>
+    </div>
+  </div>
+
+  <div class="note" id="bridge-note">
+    <strong>Sobre o botão ligar/desligar:</strong> o estado é salvo de verdade e compartilhado com todo o time.
+    A ligação com a Alice ainda depende de um webhook configurado do lado do OpenClaw — enquanto ele não existir,
+    o interruptor registra sua decisão (e fica visível pra todo mundo), mas não pausa a execução dela sozinho.
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div>
+        <h2>Rotinas programadas</h2>
+        <p>Ligar/desligar aqui grava no backend e fica visível para todo o time.</p>
+      </div>
+    </div>
+    <div class="routines" id="routineList">
+      <div class="empty">Carregando…</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <div>
+        <h2>Últimas ações</h2>
+        <p>Quem ligou ou desligou o quê, e quando.</p>
+      </div>
+    </div>
+    <div class="log" id="logList">
+      <div class="empty">Carregando…</div>
+    </div>
+  </div>
+
+  <footer>Torre de Controle · painel de acompanhamento da Alice.</footer>
+</div>
+
+<script>
+  // Aponte para a URL do seu Worker publicado (veja worker/README.md).
+  const API_BASE = window.TORRE_API_BASE || "https://SUA-API.workers.dev";
+
+  const loginView = document.getElementById('login-view');
+  const dashView = document.getElementById('dashboard-view');
+  const loginForm = document.getElementById('login-form');
+  const loginError = document.getElementById('login-error');
+  const loginBtn = document.getElementById('login-btn');
+
+  async function api(path, opts = {}) {
+    const res = await fetch(API_BASE + path, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('Erro ' + res.status));
+    }
+    return res.json();
+  }
+
+  async function checkSession() {
+    try {
+      const { authenticated, username } = await api('/api/session');
+      if (authenticated) {
+        showDashboard(username);
+      } else {
+        showLogin();
+      }
+    } catch (e) {
+      showLogin();
+    }
+  }
+
+  function showLogin() {
+    loginView.hidden = false;
+    dashView.hidden = true;
+  }
+
+  async function showDashboard(username) {
+    loginView.hidden = true;
+    dashView.hidden = false;
+    document.getElementById('whoami').textContent = username;
+    await loadRoutines();
+  }
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginError.textContent = '';
+    loginBtn.disabled = true;
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    try {
+      const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      await showDashboard(data.username);
+    } catch (err) {
+      loginError.textContent = 'Usuário ou senha inválidos.';
+    } finally {
+      loginBtn.disabled = false;
+    }
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await api('/api/logout', { method: 'POST' }).catch(() => {});
+    showLogin();
+  });
+
+  function renderRoutines(routines) {
+    const list = document.getElementById('routineList');
+    list.innerHTML = '';
+    routines.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'routine';
+      row.innerHTML = `
+        <div class="glyph">R-${String(i + 1).padStart(2, '0')}</div>
+        <div class="info"><h3>${r.name}</h3><p>${r.description}</p></div>
+        <div class="schedule">${r.schedule}<span class="state ${r.on ? 'on' : 'off'}">${r.on ? 'ligada' : 'desligada'}</span></div>
+        <button class="switch${r.on ? ' active' : ''}" role="switch" aria-checked="${r.on}" aria-label="Ativar ou desativar ${r.name}" data-id="${r.id}"></button>
+      `;
+      list.appendChild(row);
+    });
+    list.querySelectorAll('.switch').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await api(`/api/routines/${btn.dataset.id}/toggle`, { method: 'POST' });
+          await loadRoutines();
+        } catch (err) {
+          alert('Não deu pra atualizar agora: ' + err.message);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+    document.getElementById('onCount').textContent = routines.filter((r) => r.on).length + ' de ' + routines.length;
+  }
+
+  function renderLog(log) {
+    const list = document.getElementById('logList');
+    if (!log.length) {
+      list.innerHTML = '<div class="empty">Nenhuma ação registrada ainda.</div>';
+      return;
+    }
+    list.innerHTML = log.map((entry) => `
+      <div class="log-item">
+        <div class="when">${new Date(entry.at).toLocaleString('pt-BR')}</div>
+        <div>${entry.routineName} — <strong>${entry.action === 'enable' ? 'ligada' : 'desligada'}</strong></div>
+        <div class="who">por ${entry.by}${entry.bridged ? ' · enviado à Alice' : ' · só registrado aqui'}</div>
+      </div>
+    `).join('');
+  }
+
+  async function loadRoutines() {
+    try {
+      const { routines, log } = await api('/api/routines');
+      renderRoutines(routines);
+      renderLog(log);
+    } catch (err) {
+      document.getElementById('routineList').innerHTML = '<div class="empty">Não deu pra carregar: ' + err.message + '</div>';
+    }
+  }
+
+  checkSession();
+</script>
+</body>
+</html>
