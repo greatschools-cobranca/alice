@@ -1,0 +1,42 @@
+name: Deploy Torre de Controle Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
+
+      - name: Set secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "${{ secrets.JWT_SECRET }}" ]; then
+            echo "${{ secrets.JWT_SECRET }}" | npx wrangler secret put JWT_SECRET
+          fi
+          if [ -n "${{ secrets.USERS_JSON }}" ]; then
+            echo "${{ secrets.USERS_JSON }}" | npx wrangler secret put USERS_JSON
+          fi
+          if [ -n "${{ secrets.ROUTINE_WEBHOOK_URL }}" ]; then
+            echo "${{ secrets.ROUTINE_WEBHOOK_URL }}" | npx wrangler secret put ROUTINE_WEBHOOK_URL
+          fi
+
