@@ -29,14 +29,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          JWT_SECRET_VALUE: ${{ secrets.JWT_SECRET }}
+          USERS_JSON_VALUE: ${{ secrets.USERS_JSON }}
+          ROUTINE_WEBHOOK_URL_VALUE: ${{ secrets.ROUTINE_WEBHOOK_URL }}
         run: |
-          if [ -n "${{ secrets.JWT_SECRET }}" ]; then
-            echo "${{ secrets.JWT_SECRET }}" | npx wrangler secret put JWT_SECRET
+          if [ -n "$JWT_SECRET_VALUE" ]; then
+            printf '%s' "$JWT_SECRET_VALUE" | npx wrangler secret put JWT_SECRET
           fi
-          if [ -n "${{ secrets.USERS_JSON }}" ]; then
-            echo "${{ secrets.USERS_JSON }}" | npx wrangler secret put USERS_JSON
+          if [ -n "$USERS_JSON_VALUE" ]; then
+            printf '%s' "$USERS_JSON_VALUE" | npx wrangler secret put USERS_JSON
           fi
-          if [ -n "${{ secrets.ROUTINE_WEBHOOK_URL }}" ]; then
-            echo "${{ secrets.ROUTINE_WEBHOOK_URL }}" | npx wrangler secret put ROUTINE_WEBHOOK_URL
+          if [ -n "$ROUTINE_WEBHOOK_URL_VALUE" ]; then
+            printf '%s' "$ROUTINE_WEBHOOK_URL_VALUE" | npx wrangler secret put ROUTINE_WEBHOOK_URL
           fi
-
