@@ -32,6 +32,7 @@ jobs:
           JWT_SECRET_VALUE: ${{ secrets.JWT_SECRET }}
           USERS_JSON_VALUE: ${{ secrets.USERS_JSON }}
           ROUTINE_WEBHOOK_URL_VALUE: ${{ secrets.ROUTINE_WEBHOOK_URL }}
+          ALICE_API_KEY_VALUE: ${{ secrets.ALICE_API_KEY }}
         run: |
           if [ -n "$JWT_SECRET_VALUE" ]; then
             printf '%s' "$JWT_SECRET_VALUE" | npx wrangler secret put JWT_SECRET
@@ -41,4 +42,7 @@ jobs:
           fi
           if [ -n "$ROUTINE_WEBHOOK_URL_VALUE" ]; then
             printf '%s' "$ROUTINE_WEBHOOK_URL_VALUE" | npx wrangler secret put ROUTINE_WEBHOOK_URL
+          fi
+          if [ -n "$ALICE_API_KEY_VALUE" ]; then
+            printf '%s' "$ALICE_API_KEY_VALUE" | npx wrangler secret put ALICE_API_KEY
           fi
