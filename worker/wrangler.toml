@@ -6,7 +6,7 @@ compatibility_date = "2024-09-01"
 #   wrangler kv namespace create ROTINAS
 # e cole o id gerado abaixo.
 kv_namespaces = [
-  { binding = "ROTINAS", id = "COLE_AQUI_O_ID_DO_KV" }
+  { binding = "ROTINAS", id = "fb216a84c6eb46f7ac4d6fca964f4705" }
 ]
 
 # Secrets (não vão neste arquivo — configure com `wrangler secret put NOME`):
