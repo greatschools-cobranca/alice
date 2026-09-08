@@ -6,6 +6,9 @@
  *   POST /api/logout           -> clears session cookie
  *   GET  /api/session          -> { authenticated, username }
  *   GET  /api/routines         -> list of routines with current on/off state
+ *   GET  /api/routines/status  -> PUBLIC, no auth. Minimal machine-readable status:
+ *                                  [{ id, on }, ...]. Meant for Alice/OpenClaw to poll
+ *                                  before running a routine — no names/descriptions/logs.
  *   POST /api/routines/:id/toggle -> flips a routine's state, logs it, calls the
  *                                    bridge webhook if ROUTINE_WEBHOOK_URL is set
  *
@@ -201,6 +204,13 @@ export default {
       if (url.pathname === "/api/session" && request.method === "GET") {
         const username = await requireAuth(request, env);
         return jsonResponse({ authenticated: !!username, username: username || null }, { headers: cors });
+      }
+
+      // ---- GET /api/routines/status (public, no auth, minimal fields) ----
+      if (url.pathname === "/api/routines/status" && request.method === "GET") {
+        const routines = await getRoutineState(env);
+        const status = routines.map((r) => ({ id: r.id, on: r.on }));
+        return jsonResponse(status, { headers: cors });
       }
 
       // ---- GET /api/routines ----
