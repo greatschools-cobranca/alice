@@ -80,15 +80,22 @@
   .note strong{ color:var(--text); }
 
   .routines{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
-  .routine{ display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:16px; padding:16px 20px; border-bottom:1px solid var(--border); }
+  .routine{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:16px; padding:16px 20px; border-bottom:1px solid var(--border); }
   .routine:last-child{ border-bottom:none; }
-  .routine .glyph{ width:38px; height:38px; border-radius:9px; background:var(--surface-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:500; color:var(--text-muted); }
+  .routine .glyph{ width:38px; height:38px; border-radius:9px; background:var(--surface-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:500; color:var(--text-muted); align-self:start; }
   .routine .info h3{ font-size:0.95rem; font-weight:600; }
-  .routine .info p{ color:var(--text-muted); font-size:0.83rem; margin:3px 0 0; }
-  .routine .schedule{ font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--text-muted); text-align:right; white-space:nowrap; }
-  .routine .schedule .state{ display:block; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; margin-top:3px; }
-  .routine .schedule .state.on{ color:var(--accent); }
-  .routine .schedule .state.off{ color:var(--off); }
+  .routine .info .context-line{ color:var(--text-muted); font-size:0.83rem; margin:4px 0 0; }
+  .routine .info .schedule-line{ font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--text-faint); margin:4px 0 0; }
+  .routine .info .info-btn{
+    margin-top:10px; display:inline-flex; align-items:center; gap:6px;
+    background:#1B3A5C; color:#fff; border:none; border-radius:6px;
+    padding:6px 12px; font-size:0.78rem; font-weight:600; cursor:pointer;
+  }
+  .routine .info .info-btn:hover{ background:#14293f; }
+  .routine .control{ display:flex; align-items:center; gap:10px; justify-self:end; align-self:start; }
+  .routine .control .state-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap; }
+  .routine .control .state-label.on{ color:var(--accent); }
+  .routine .control .state-label.off{ color:var(--off); }
 
   .switch{ position:relative; width:44px; height:25px; flex-shrink:0; border-radius:999px; border:none; cursor:pointer; background:var(--off-soft); transition:background .15s ease; padding:0; }
   .switch::after{ content:''; position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s ease; }
@@ -110,10 +117,20 @@
 
   footer{ margin-top:56px; padding-top:18px; border-top:1px solid var(--border); font-size:0.78rem; color:var(--text-faint); }
 
+  /* ---- routine info popup ---- */
+  .modal-overlay{ position:fixed; inset:0; background:rgba(20,17,10,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:28px; max-width:440px; width:100%; }
+  .modal-card .glyph{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:var(--surface-2); border:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:var(--text-muted); margin-bottom:12px; }
+  .modal-card h3{ font-size:1.1rem; font-weight:600; }
+  .modal-card .modal-schedule{ font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--text-faint); margin:8px 0 16px; }
+  .modal-card p.modal-desc{ font-size:0.9rem; color:var(--text); line-height:1.6; margin:0; }
+  .modal-close{ margin-top:22px; padding:9px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.86rem; font-weight:500; cursor:pointer; }
+  .modal-close:hover{ background:var(--off-soft); }
+
   @media (max-width:560px){
     .status-bar{ flex-direction:column; align-items:flex-start; }
-    .routine{ grid-template-columns:auto 1fr auto; }
-    .routine .schedule{ grid-column:2/4; text-align:left; }
+    .routine{ grid-template-columns:auto 1fr; row-gap:12px; }
+    .routine .control{ grid-column:1/3; justify-self:start; }
     .log-item{ grid-template-columns:1fr; gap:2px; }
   }
 </style>
@@ -194,6 +211,17 @@
   <footer>Torre de Controle · painel de acompanhamento da Alice.</footer>
 </div>
 
+<!-- ============ POPUP: informações da rotina ============ -->
+<div class="modal-overlay" id="routine-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="glyph" id="modal-glyph"></div>
+    <h3 id="modal-title"></h3>
+    <div class="modal-schedule" id="modal-schedule"></div>
+    <p class="modal-desc" id="modal-desc"></p>
+    <button class="modal-close" id="modal-close">Fechar</button>
+  </div>
+</div>
+
 <script>
   // Aponte para a URL do seu Worker publicado (veja worker/README.md).
   const API_BASE = window.TORRE_API_BASE || "https://torre-de-controle-api.alice-fontes.workers.dev";
@@ -263,17 +291,28 @@
     showLogin();
   });
 
+  let currentRoutines = [];
+
   function renderRoutines(routines) {
+    currentRoutines = routines;
     const list = document.getElementById('routineList');
     list.innerHTML = '';
     routines.forEach((r, i) => {
+      const glyph = 'R-' + String(i + 1).padStart(2, '0');
       const row = document.createElement('div');
       row.className = 'routine';
       row.innerHTML = `
-        <div class="glyph">R-${String(i + 1).padStart(2, '0')}</div>
-        <div class="info"><h3>${r.name}</h3><p>${r.description}</p></div>
-        <div class="schedule">${r.schedule}<span class="state ${r.on ? 'on' : 'off'}">${r.on ? 'ligada' : 'desligada'}</span></div>
-        <button class="switch${r.on ? ' active' : ''}" role="switch" aria-checked="${r.on}" aria-label="Ativar ou desativar ${r.name}" data-id="${r.id}"></button>
+        <div class="glyph">${glyph}</div>
+        <div class="info">
+          <h3>${r.name}</h3>
+          ${r.note ? `<p class="context-line">${r.note}</p>` : ''}
+          <p class="schedule-line">${r.schedule}</p>
+          <button class="info-btn" data-id="${r.id}" type="button">Informações da rotina</button>
+        </div>
+        <div class="control">
+          <span class="state-label ${r.on ? 'on' : 'off'}">${r.on ? 'ligada' : 'desligada'}</span>
+          <button class="switch${r.on ? ' active' : ''}" role="switch" aria-checked="${r.on}" aria-label="Ativar ou desativar ${r.name}" data-id="${r.id}"></button>
+        </div>
       `;
       list.appendChild(row);
     });
@@ -290,8 +329,33 @@
         }
       });
     });
+    list.querySelectorAll('.info-btn').forEach((btn, i) => {
+      btn.addEventListener('click', () => openRoutineModal(btn.dataset.id, i));
+    });
     document.getElementById('onCount').textContent = routines.filter((r) => r.on).length + ' de ' + routines.length;
   }
+
+  function openRoutineModal(id, index) {
+    const r = currentRoutines.find((x) => x.id === id);
+    if (!r) return;
+    document.getElementById('modal-glyph').textContent = 'R-' + String(index + 1).padStart(2, '0');
+    document.getElementById('modal-title').textContent = r.name;
+    document.getElementById('modal-schedule').textContent = r.schedule;
+    document.getElementById('modal-desc').textContent = r.description;
+    document.getElementById('routine-modal').hidden = false;
+  }
+
+  function closeRoutineModal() {
+    document.getElementById('routine-modal').hidden = true;
+  }
+
+  document.getElementById('modal-close').addEventListener('click', closeRoutineModal);
+  document.getElementById('routine-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'routine-modal') closeRoutineModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeRoutineModal();
+  });
 
   function renderLog(log) {
     const list = document.getElementById('logList');
