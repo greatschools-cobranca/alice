@@ -114,6 +114,52 @@ const DEFAULT_ROUTINES = [
     schedule: "dias úteis · janelas entre 10:30 e 13:00 (America/Sao_Paulo)",
     description:
       "Procura o e-mail 'Base Cobrança - Análise diária' na caixa gmail-alice, classifica a base por CPF (Rematriculável / Mensagem automática) e responde com a planilha processada.",
+    prompt:
+      "Alice, realize a análise diária completa da base de cobrança com os arquivos enviados.\n\n" +
+      "Arquivos enviados hoje:\n" +
+      "1. Base TOTVS: histórico de lançamentos financeiros desde 2021 até a data atual;\n" +
+      "2. INA-BI Interno: base de inadimplência do ano vigente/base de cobrança trabalhada;\n" +
+      "3. PÓS-ENVIO: base dos CPFs que receberam mensagens automáticas de cobrança hoje.\n\n" +
+      "Use a classificação de tipo de serviço que você já tem salva como referência. Não estou reenviando essa planilha.\n\n" +
+      "Objetivo:\n" +
+      "• Classificar o perfil de inadimplência por CPF do responsável financeiro;\n" +
+      "• Atualizar a base INA-BI Interno com Rematriculável, PERFIL CPF e Mensagem automática hoje;\n" +
+      "• Gerar nova planilha sem sobrescrever os arquivos originais;\n" +
+      "• Informar premissas, totais e divergências encontradas.\n\n" +
+      "Escopo da classificação:\n" +
+      "• Considerar somente lançamentos vencidos e em aberto;\n" +
+      "• Considerar vencidos até a data de hoje;\n" +
+      "• Considerar todos os anos de vencimento;\n" +
+      "• Não considerar classificação histórica;\n" +
+      "• Desconsiderar antes da classificação qualquer lançamento cuja coluna HISTORICO contenha TESTE;\n" +
+      "• Classificar no nível do CPF, consolidando todos os lançamentos válidos do mesmo responsável financeiro.\n\n" +
+      "Regras principais:\n" +
+      "1. PROTESTADO = S ou E → Crítico - protesto;\n" +
+      "2. Acordo em aberto → Crítico;\n" +
+      "3. Curso regular com até 2 parcelas vencidas → Pontual;\n" +
+      "4. Curso regular com 3 ou mais parcelas vencidas → Recorrente;\n" +
+      "5. Apenas material didático → Estratégico MD;\n" +
+      "6. Apenas complementos → Estratégico;\n" +
+      "7. Complementos + material didático → Estratégico + MD;\n" +
+      "8. Apenas taxas, saídas e eventos → Estratégico taxas.\n\n" +
+      "Regras complementares:\n" +
+      "• NF REVENDA - A RECEBER com SERVICO vazio = Material Didático;\n" +
+      "• Complementos + Taxas/Eventos/Saídas = Estratégico;\n" +
+      "• Material Didático + Taxas/Eventos/Saídas = Estratégico MD;\n" +
+      "• Material Didático + Complementos + Taxas/Eventos/Saídas = Estratégico + MD.\n\n" +
+      "Critério de rematriculável:\n" +
+      "• CPF com pelo menos um aluno em DESCRICAO = 5 - CURSANDO;\n" +
+      "• Excluir M3 de todas as escolas;\n" +
+      "• Excluir F9 somente do CJA.\n\n" +
+      "Mensagem automática:\n" +
+      "• Cruzar o PÓS-ENVIO com a base INA-BI Interno por CPF;\n" +
+      "• Marcar Mensagem automática hoje = Sim, Não ou Sem CPF.\n\n" +
+      "Entrega esperada:\n" +
+      "• Planilha final atualizada;\n" +
+      "• Aba/resumo de perfil por CPF;\n" +
+      "• Aba com CPF, perfil e valor total de inadimplência;\n" +
+      "• Premissas e divergências;\n" +
+      "• Resumo com total de linhas, linhas desconsideradas por TESTE, CPFs únicos, CPFs por perfil, valor por perfil, rematriculáveis e mensagens automáticas do dia.",
     defaultOn: true,
   },
 ];
