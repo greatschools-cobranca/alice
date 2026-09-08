@@ -35,7 +35,59 @@ const DEFAULT_ROUTINES = [
     note: "Realizado diretamente na Planilha Online de Cronograma.",
     schedule: "todos os dias · 08:00 (America/Sao_Paulo)",
     description:
-      "Compara as planilhas de regras e de eventos com a agenda Google 'Cobrança'; cria/atualiza eventos e avisa cobranca@greatschools.com.br só quando algo muda.",
+      "Essa rotina atualiza a base de disparos automáticos da integração TOTVS x WorkChat para o período informado na aba Disparos TOTVS. A finalidade é calcular, por unidade/escola, quantos disparos de cada régua de cobrança serão realizados na semana.",
+    steps: [
+      {
+        title: "Verificar o arquivo de origem no Drive",
+        items: [
+          "Acessar a pasta BOLETOS POR DIA DE VENCIMENTO.",
+          "Confirmar que o arquivo do dia existe na pasta.",
+          "Validar a estrutura mínima: Grupo, Unidade, DATA VENCIMENTO, QT. BOLETOS e QT. BOLETOS INA.",
+        ],
+      },
+      {
+        title: "Atualizar o período de disparo",
+        items: [
+          "Abrir a planilha Cronograma Cobrança - 2026.",
+          "Ir na aba Disparos TOTVS.",
+          "Ajustar o período de disparo com segunda e sexta-feira da semana atual.",
+        ],
+      },
+      {
+        title: "Limpar os resultados antigos",
+        items: [
+          "Limpar os resultados da tabela da aba Disparos TOTVS.",
+          "Limpar os resultados da aba Tabela vencimentos.",
+        ],
+      },
+      {
+        title: "Atualizar a Tabela vencimentos",
+        items: [
+          "Usar o arquivo BOLETOS POR DIA DE VENCIMENTO como origem.",
+          "Atualizar os vencimentos do mês anterior e do mês atual com QT. BOLETOS INA maior que zero.",
+          "Atualizar também os vencimentos do mês atual, a partir do dia de hoje, com QT. BOLETOS maior que zero.",
+          "Manter uma linha por unidade/escola.",
+          "Atualizar a observação com data e \"Atualizado por: Alice Fontes\".",
+        ],
+      },
+      {
+        title: "Apresentar os resultados na Disparos TOTVS",
+        items: [
+          "Usar a Tabela consulta-Não editar para identificar as datas de disparo por régua.",
+          "Apresentar uma linha para cada unidade/escola.",
+          "Não agrupar unidades na mesma linha.",
+          "Considerar apenas disparos dentro do período configurado.",
+        ],
+      },
+      {
+        title: "Conferência final",
+        items: [
+          "Validar o período configurado.",
+          "Validar que a aba Disparos TOTVS não tem registros antigos de resultado.",
+          "Somar o total de disparos e conferir se o volume faz sentido.",
+        ],
+      },
+    ],
     defaultOn: true,
   },
   {
