@@ -31,7 +31,8 @@ const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12h
 const DEFAULT_ROUTINES = [
   {
     id: "agenda-cobranca",
-    name: "Verificar planilha de eventos da Cobrança e atualizar agenda",
+    name: "Atualizar cronograma de disparos da régua automática de cobrança",
+    note: "Realizado diretamente na Planilha Online de Cronograma.",
     schedule: "todos os dias · 08:00 (America/Sao_Paulo)",
     description:
       "Compara as planilhas de regras e de eventos com a agenda Google 'Cobrança'; cria/atualiza eventos e avisa cobranca@greatschools.com.br só quando algo muda.",
@@ -39,7 +40,8 @@ const DEFAULT_ROUTINES = [
   },
   {
     id: "analise-base-cobranca",
-    name: "Análise diária Base Cobrança por e-mail",
+    name: "Suporte na preparação da base de cobrança manual",
+    note: "Sob demanda / Solicitação recebida por email.",
     schedule: "dias úteis · janelas entre 10:30 e 13:00 (America/Sao_Paulo)",
     description:
       "Procura o e-mail 'Base Cobrança - Análise diária' na caixa gmail-alice, classifica a base por CPF (Rematriculável / Mensagem automática) e responde com a planilha processada.",
