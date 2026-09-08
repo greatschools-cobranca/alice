@@ -132,6 +132,25 @@
   .modal-close{ margin-top:22px; padding:9px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.86rem; font-weight:500; cursor:pointer; }
   .modal-close:hover{ background:var(--off-soft); }
 
+  /* ---- pendências da Alice ---- */
+  .count-pill{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:var(--warn); color:#fff; font-size:0.72rem; font-weight:700; margin-left:8px; }
+  .pending-list{ background:var(--surface); border:1px solid var(--warn); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
+  .pending-item{ padding:16px 20px; border-bottom:1px solid var(--border); }
+  .pending-item:last-child{ border-bottom:none; }
+  .pending-item .row-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pending-item .type-pill{ font-size:0.66rem; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:20px; background:var(--warn-soft); color:var(--warn); font-weight:700; }
+  .pending-item h3{ font-size:0.92rem; font-weight:600; margin:0; }
+  .pending-item .meta{ font-family:'IBM Plex Mono',monospace; font-size:0.74rem; color:var(--text-faint); margin-top:6px; }
+  .pending-item .preview{ font-size:0.85rem; color:var(--text-muted); margin-top:8px; line-height:1.5; max-width:70ch; }
+  .pending-item .preview strong{ color:var(--text); font-weight:600; }
+  .pending-actions{ display:flex; gap:10px; margin-top:12px; }
+  .btn-approve, .btn-reject{ padding:7px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; border:none; }
+  .btn-approve{ background:var(--accent); color:#fff; }
+  .btn-approve:hover{ background:var(--accent-strong); }
+  .btn-reject{ background:var(--surface-2); color:var(--danger); border:1px solid var(--border); }
+  .btn-reject:hover{ background:var(--danger-soft); }
+  .btn-approve:disabled, .btn-reject:disabled{ opacity:.5; cursor:wait; }
+
   @media (max-width:560px){
     .status-bar{ flex-direction:column; align-items:flex-start; }
     .routine{ grid-template-columns:auto 1fr; row-gap:12px; }
@@ -187,6 +206,16 @@
     <strong>Sobre o botão ligar/desligar:</strong> o estado é salvo de verdade e compartilhado com todo o time.
     A ligação com a Alice ainda depende de um webhook configurado do lado do OpenClaw — enquanto ele não existir,
     o interruptor registra sua decisão (e fica visível pra todo mundo), mas não pausa a execução dela sozinho.
+  </div>
+
+  <div class="section" id="pending-section" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Pendências da Alice<span class="count-pill" id="pendingCount">0</span></h2>
+        <p>Rotinas novas ou alterações que a Alice propôs sozinha — só valem depois que você aprovar aqui.</p>
+      </div>
+    </div>
+    <div class="pending-list" id="pendingList"></div>
   </div>
 
   <div class="section">
@@ -405,6 +434,76 @@
       renderLog(log);
     } catch (err) {
       document.getElementById('routineList').innerHTML = '<div class="empty">Não deu pra carregar: ' + err.message + '</div>';
+    }
+    await loadPending();
+  }
+
+  function fieldPreview(payload) {
+    const parts = [];
+    if (payload.schedule) parts.push(`<strong>Periodicidade:</strong> ${escapeHtml(payload.schedule)}`);
+    if (payload.note) parts.push(`<strong>Nota:</strong> ${escapeHtml(payload.note)}`);
+    if (payload.description) parts.push(`<strong>Descrição:</strong> ${escapeHtml(payload.description)}`);
+    if (Array.isArray(payload.steps)) parts.push(`<strong>Passo a passo:</strong> ${payload.steps.length} etapa(s)`);
+    if (Object.prototype.hasOwnProperty.call(payload, 'defaultOn')) {
+      parts.push(`<strong>Estado inicial:</strong> ${payload.defaultOn ? 'ligada' : 'desligada'}`);
+    }
+    return parts.map((p) => `<div>${p}</div>`).join('');
+  }
+
+  function renderPending(list) {
+    const section = document.getElementById('pending-section');
+    const container = document.getElementById('pendingList');
+    document.getElementById('pendingCount').textContent = list.length;
+
+    if (!list.length) {
+      section.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    section.hidden = false;
+
+    container.innerHTML = list.map((p) => {
+      const title = p.type === 'create' ? escapeHtml(p.payload.name) : escapeHtml(p.current ? p.current.name : p.routineId);
+      const typeLabel = p.type === 'create' ? 'Nova rotina' : 'Edição';
+      return `
+        <div class="pending-item" data-proposal-id="${p.proposalId}">
+          <div class="row-head">
+            <span class="type-pill">${typeLabel}</span>
+            <h3>${title}</h3>
+          </div>
+          <div class="meta">id: ${escapeHtml(p.routineId)} · proposto por Alice em ${new Date(p.proposedAt).toLocaleString('pt-BR')}</div>
+          <div class="preview">${fieldPreview(p.payload)}</div>
+          <div class="pending-actions">
+            <button class="btn-approve" data-action="approve" data-id="${p.proposalId}">Aprovar</button>
+            <button class="btn-reject" data-action="reject" data-id="${p.proposalId}">Rejeitar</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('button[data-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const proposalId = btn.dataset.id;
+        const action = btn.dataset.action;
+        const item = btn.closest('.pending-item');
+        item.querySelectorAll('button').forEach((b) => (b.disabled = true));
+        try {
+          await api(`/api/routines/pending/${proposalId}/${action}`, { method: 'POST' });
+          await loadRoutines();
+        } catch (err) {
+          alert('Não deu pra ' + (action === 'approve' ? 'aprovar' : 'rejeitar') + ' agora: ' + err.message);
+          item.querySelectorAll('button').forEach((b) => (b.disabled = false));
+        }
+      });
+    });
+  }
+
+  async function loadPending() {
+    try {
+      const { pending } = await api('/api/routines/pending');
+      renderPending(pending);
+    } catch (err) {
+      // silencioso — a lista de rotinas já carregou; não trava o resto do painel
     }
   }
 
