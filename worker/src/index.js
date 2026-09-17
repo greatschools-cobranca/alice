@@ -162,6 +162,108 @@ const DEFAULT_ROUTINES = [
       "• Resumo com total de linhas, linhas desconsideradas por TESTE, CPFs únicos, CPFs por perfil, valor por perfil, rematriculáveis e mensagens automáticas do dia.",
     defaultOn: true,
   },
+  {
+    id: "emails-ina-ciclo-2027",
+    name: "E-mails INA Ciclo 2027",
+    note: "Fonte: e-mails de [e-mail removido] na label Rematrícula 2027 (não usa a caixa de entrada).",
+    schedule: "terças e quintas · janela principal 16h e 16h30, checagem complementar às 17h (America/Sao_Paulo)",
+    description:
+      "Busca, na label 'Rematrícula 2027' (sem subpastas regionais), e-mails de [e-mail removido] " +
+      "com assunto contendo 'INA CICLO 2027' e data do dia da execução. Separa por regional pelo conteúdo/assunto " +
+      "e pelos nomes das imagens das unidades, valida se todas as unidades esperadas de cada regional chegaram, " +
+      "baixa e confere as imagens (sem duplicidade por hash) e envia um e-mail por regional com os indicadores de " +
+      "inadimplência da rematrícula, anexando apenas as imagens daquela regional.",
+    steps: [
+      {
+        title: "Unidades esperadas por regional",
+        items: [
+          "Regional Horizonte: CCPA, Objetivo Praia Grande e Objetivo São Vicente.",
+          "Regional Conexão: Marupiara, Objetivo Aquarius e Anchieta/CJA.",
+          "Regional Santos: Objetivo Guarujá, Objetivo Embaré, Objetivo Conselheiro e Objetivo Ponta da Praia.",
+          "Santo Anjo: Santo Anjo.",
+        ],
+      },
+      {
+        title: "Validações antes de enviar",
+        items: [
+          "Conferir se todos os e-mails/imagens da regional chegaram no dia.",
+          "Baixar os anexos/imagens de cada unidade.",
+          "Conferir se há uma imagem correspondente para cada unidade esperada.",
+          "Verificar se as imagens não estão duplicadas pelo hash.",
+          "Verificar se a regional já foi enviada no dia, para evitar duplicidade.",
+        ],
+      },
+      {
+        title: "Tratamento de exceções",
+        items: [
+          "Faltando e-mail, imagem ou unidade da regional: registrar WAIT e não enviar aquela regional.",
+          "Regional já enviada no dia: registrar SKIP e não reenviar.",
+          "Erro real no envio: registrar erro no log e disparar alerta.",
+        ],
+      },
+      {
+        title: "Envio — destinatários e cópias",
+        items: [
+          "Regional Horizonte → [e-mail removido]",
+          "Regional Conexão → [e-mail removido]",
+          "Regional Santos → [e-mail removido]",
+          "Santo Anjo → [e-mail removido]",
+          "Cc geral (todas as regionais): [e-mail removido] e [e-mail removido].",
+          "Cc adicional só para Regional Conexão: [e-mail removido].",
+        ],
+      },
+      {
+        title: "Assunto e anexos",
+        items: [
+          "Assunto: 'INA CICLO 2027 - <Nome da Regional> - DD/MM/AAAA'.",
+          "Cada regional recebe só o conjunto de imagens da própria regional.",
+        ],
+      },
+      {
+        title: "Registros e rastreabilidade",
+        items: [
+          "Gerar arquivo de trabalho por data.",
+          "Salvar marcador .sent por regional enviada no dia.",
+          "Registrar destinatário, Cc, assunto, IDs dos e-mails de origem e quantidade de anexos.",
+          "Manter log da rotina em state/rematricula_2027.log.",
+        ],
+      },
+      {
+        title: "O que a rotina não faz",
+        items: [
+          "Não recalcula indicadores.",
+          "Não altera os dados das imagens.",
+          "Não envia para responsáveis financeiros, alunos ou famílias.",
+          "Não usa a caixa de entrada como fonte principal.",
+          "Não reenvia regional já marcada como enviada no mesmo dia.",
+        ],
+      },
+    ],
+    prompt:
+      "Prezados, boa tarde!\n\n" +
+      "Segue a atualização dos principais indicadores de inadimplência relacionados à rematrícula da unidade, " +
+      "considerando a base de alunos elegíveis à rematrícula para o período letivo de 2027.\n\n" +
+      "Indicadores acompanhados:\n" +
+      "➡️ Qt. de alunos na base rematriculável hoje: total de alunos cursando em 2026 que ainda não concluíram a " +
+      "rematrícula, exceto alunos do M3 (F9 para CJA).\n" +
+      "➡️ Qt. de responsáveis financeiros inadimplentes: total de responsáveis financeiros inadimplentes dentro " +
+      "da base rematriculável.\n" +
+      "➡️ Qt. de alunos com portal bloqueado: alunos vinculados a responsáveis financeiros com inadimplência " +
+      "superior a R$ 650,00, ficando impossibilitados de realizar a rematrícula.\n" +
+      "➡️ Qt. de alunos com portal liberado: alunos vinculados a responsáveis financeiros com inadimplência " +
+      "inferior a R$ 650,00, permanecendo aptos a realizar a rematrícula.\n" +
+      "➡️ Qt. de alunos adimplentes: alunos vinculados a responsáveis financeiros sem inadimplência e aptos a " +
+      "realizar a rematrícula.\n" +
+      "➡️ Qt. de alunos rematriculados: alunos da base rematriculável com status \"Matrícula Solicitada\" no " +
+      "período letivo de 2027. Para este indicador, é considerado apenas o processo realizado pelo portal, sem " +
+      "validação da baixa da 1ª parcela.\n\n" +
+      "Esses indicadores serão atualizados às 3ªs e 5ªs feiras para acompanhamento da evolução da inadimplência " +
+      "e de seus impactos no processo de rematrícula.\n\n" +
+      "Atenciosamente,\n\n" +
+      "Alice Fontes\n" +
+      "Área de Sucesso das Escolas | Cobrança",
+    defaultOn: true,
+  },
 ];
 
 function jsonResponse(data, init = {}) {
