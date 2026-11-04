@@ -3,527 +3,962 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>Torre de Controle</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root{
-    --bg: #F6F3EC; --surface: #FFFFFF; --surface-2: #FBF8F1; --border: #E4DDCB;
-    --text: #211E16; --text-muted: #78715D; --text-faint: #A79E86;
-    --accent: #0F7A73; --accent-soft: #E0EFEA; --accent-strong: #0A5A55;
-    --warn: #B5732A; --warn-soft: #F5E7D5; --off: #A79E86; --off-soft: #EFEAE0;
-    --danger: #B23A3A; --danger-soft: #F5DEDE;
-    --shadow: 0 1px 2px rgba(33,30,22,0.05), 0 8px 24px -12px rgba(33,30,22,0.12);
+    --bg:#F6F3EC; --surface:#FFFFFF; --surface-2:#FBF8F1; --border:#E4DDCB;
+    --text:#211E16; --text-muted:#78715D; --text-faint:#A79E86;
+    --accent:#0F7A73; --accent-soft:#E0EFEA; --accent-strong:#0A5A55;
+    --warn:#B5732A; --warn-soft:#F5E7D5; --off:#A79E86; --off-soft:#EFEAE0;
+    --danger:#B23A3A; --danger-soft:#F5DEDE; --navy:#1B3A5C;
+    --shadow:0 1px 2px rgba(33,30,22,0.05), 0 8px 24px -12px rgba(33,30,22,0.12);
   }
   @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
+    :root{
       --bg:#14161A; --surface:#1C1F24; --surface-2:#20242A; --border:#2C3038;
       --text:#ECE8DD; --text-muted:#9A9A8C; --text-faint:#6E6E63;
       --accent:#35B8A9; --accent-soft:#1C2E2C; --accent-strong:#5FD1C3;
       --warn:#E0A458; --warn-soft:#2E271B; --off:#6E6E63; --off-soft:#23262B;
-      --danger:#E07777; --danger-soft:#3A2323;
-      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.5);
+      --danger:#E07777; --danger-soft:#3A2323; --navy:#2E5C8C;
+      --shadow:0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.5);
     }
-  }
-  :root[data-theme="dark"]{
-    --bg:#14161A; --surface:#1C1F24; --surface-2:#20242A; --border:#2C3038;
-    --text:#ECE8DD; --text-muted:#9A9A8C; --text-faint:#6E6E63;
-    --accent:#35B8A9; --accent-soft:#1C2E2C; --accent-strong:#5FD1C3;
-    --warn:#E0A458; --warn-soft:#2E271B; --off:#6E6E63; --off-soft:#23262B;
-    --danger:#E07777; --danger-soft:#3A2323;
-    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.5);
   }
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',system-ui,sans-serif; line-height:1.5; }
   h1,h2,h3{ font-family:'Zilla Slab',Georgia,serif; margin:0; text-wrap:balance; }
   .mono{ font-family:'IBM Plex Mono',ui-monospace,monospace; }
   [hidden]{ display:none !important; }
+  button{ font-family:inherit; }
+  a{ color:var(--accent); }
 
-  /* ---- login screen ---- */
+  /* ---- login ---- */
   #login-view{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
   .login-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:36px 32px; width:100%; max-width:360px; }
-  .login-card .status-dot{ width:10px; height:10px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); display:inline-block; margin-bottom:14px; }
   .login-card h1{ font-size:1.4rem; font-weight:600; }
   .login-card p.sub{ color:var(--text-muted); font-size:0.88rem; margin:6px 0 24px; }
   label{ display:block; font-size:0.78rem; color:var(--text-muted); margin-bottom:6px; }
-  input[type="text"], input[type="password"]{
+  input[type="text"], input[type="password"], input[type="time"], textarea, select{
     width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
-    background:var(--surface-2); color:var(--text); font-size:0.95rem; margin-bottom:16px;
-    font-family:'IBM Plex Sans',sans-serif;
+    background:var(--surface-2); color:var(--text); font-size:0.92rem; margin-bottom:14px; font-family:inherit;
   }
-  input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
-  button.primary{
-    width:100%; padding:11px; border-radius:8px; border:none; background:var(--accent);
-    color:#fff; font-weight:600; font-size:0.95rem; cursor:pointer;
-  }
-  button.primary:hover{ background:var(--accent-strong); }
-  .error-msg{ color:var(--danger); font-size:0.84rem; margin:-8px 0 14px; min-height:1em; }
+  textarea{ resize:vertical; min-height:80px; }
+  textarea.code{ font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  input:focus, textarea:focus, select:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+  .btn{ padding:9px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.86rem; font-weight:500; cursor:pointer; }
+  .btn:hover{ background:var(--off-soft); }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .btn.primary:hover{ background:var(--accent-strong); }
+  .btn.danger{ color:var(--danger); }
+  .btn.small{ padding:5px 10px; font-size:0.78rem; }
+  .btn:disabled{ opacity:.55; cursor:wait; }
+  .btn.block{ width:100%; padding:11px; }
+  .error-msg{ color:var(--danger); font-size:0.84rem; margin:-6px 0 12px; min-height:1em; }
+  .hint{ font-size:0.76rem; color:var(--text-faint); margin:-8px 0 14px; }
 
-  /* ---- dashboard shell ---- */
-  .wrap{ max-width:920px; margin:0 auto; padding:40px 20px 80px; }
+  /* ---- shell ---- */
+  .wrap{ max-width:980px; margin:0 auto; padding:32px 20px 80px; }
   .status-bar{ display:flex; align-items:center; justify-content:space-between; gap:16px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 22px; box-shadow:var(--shadow); flex-wrap:wrap; }
   .status-bar .id{ display:flex; align-items:center; gap:14px; }
-  .status-dot{ width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); flex-shrink:0; }
+  .status-dot{ width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); flex-shrink:0; display:inline-block; }
+  .status-dot.off{ background:var(--off); box-shadow:0 0 0 4px var(--off-soft); }
+  .status-dot.bad{ background:var(--danger); box-shadow:0 0 0 4px var(--danger-soft); }
   .status-bar h1{ font-size:1.35rem; font-weight:600; }
-  .status-bar .subtitle{ color:var(--text-muted); font-size:0.88rem; margin-top:2px; }
+  .status-bar .subtitle{ color:var(--text-muted); font-size:0.86rem; margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
   .status-meta{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
   .status-meta div{ text-align:right; }
   .status-meta .k{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); }
   .status-meta .v{ font-size:0.92rem; font-weight:500; margin-top:2px; }
-  .logout-link{ background:none; border:none; color:var(--text-muted); font-size:0.8rem; cursor:pointer; text-decoration:underline; padding:0; }
+  .linkish{ background:none; border:none; color:var(--text-muted); font-size:0.8rem; cursor:pointer; text-decoration:underline; padding:0; }
 
-  .section{ margin-top:44px; }
-  .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .pill{ font-size:0.68rem; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:20px; display:inline-block; font-weight:600; }
+  .pill.ok{ background:var(--accent-soft); color:var(--accent-strong); }
+  .pill.warn{ background:var(--warn-soft); color:var(--warn); }
+  .pill.bad{ background:var(--danger-soft); color:var(--danger); }
+  .pill.off{ background:var(--off-soft); color:var(--text-muted); }
+
+  .tabs{ display:flex; gap:4px; margin:28px 0 18px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .tab{ background:none; border:none; padding:10px 16px; font-size:0.92rem; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; font-weight:500; }
+  .tab[aria-selected="true"]{ color:var(--text); border-bottom-color:var(--accent); }
+  .tab .count{ font-size:0.7rem; background:var(--warn); color:#fff; border-radius:999px; padding:1px 6px; margin-left:6px; }
+
+  .section{ margin-top:28px; }
+  .section-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .section-head h2{ font-size:1.15rem; font-weight:600; }
-  .section-head p{ color:var(--text-muted); font-size:0.86rem; margin:4px 0 0; max-width:60ch; }
-
-  .note{ background:var(--surface-2); border:1px dashed var(--border); border-radius:12px; padding:16px 20px; font-size:0.86rem; color:var(--text-muted); margin-top:18px; }
+  .section-head p{ color:var(--text-muted); font-size:0.86rem; margin:4px 0 0; max-width:62ch; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); }
+  .card.pad{ padding:20px; }
+  .empty{ color:var(--text-faint); font-size:0.86rem; padding:16px 20px; }
+  .note{ background:var(--surface-2); border:1px dashed var(--border); border-radius:12px; padding:14px 18px; font-size:0.85rem; color:var(--text-muted); margin-top:16px; }
   .note strong{ color:var(--text); }
 
-  .routines{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
-  .routine{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:16px; padding:16px 20px; border-bottom:1px solid var(--border); }
-  .routine:last-child{ border-bottom:none; }
-  .routine .glyph{ width:38px; height:38px; border-radius:9px; background:var(--surface-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:500; color:var(--text-muted); align-self:start; }
-  .routine .info h3{ font-size:0.95rem; font-weight:600; }
-  .routine .info .context-line{ color:var(--text-muted); font-size:0.83rem; margin:4px 0 0; }
-  .routine .info .schedule-line{ font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--text-faint); margin:4px 0 0; }
-  .routine .info .info-btn{
-    margin-top:10px; display:inline-flex; align-items:center; gap:6px;
-    background:#1B3A5C; color:#fff; border:none; border-radius:6px;
-    padding:6px 12px; font-size:0.78rem; font-weight:600; cursor:pointer;
-  }
-  .routine .info .info-btn:hover{ background:#14293f; }
-  .routine .control{ display:flex; align-items:center; gap:10px; justify-self:end; align-self:start; }
-  .routine .control .state-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap; }
-  .routine .control .state-label.on{ color:var(--accent); }
-  .routine .control .state-label.off{ color:var(--off); }
-
-  .switch{ position:relative; width:44px; height:25px; flex-shrink:0; border-radius:999px; border:none; cursor:pointer; background:var(--off-soft); transition:background .15s ease; padding:0; }
-  .switch::after{ content:''; position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s ease; }
+  /* ---- rotinas ---- */
+  .row{ display:grid; grid-template-columns:auto 1fr auto; align-items:start; gap:16px; padding:16px 20px; border-bottom:1px solid var(--border); }
+  .row:last-child{ border-bottom:none; }
+  .glyph{ width:38px; height:38px; border-radius:9px; background:var(--surface-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-muted); }
+  .row h3{ font-size:0.95rem; font-weight:600; }
+  .line{ color:var(--text-muted); font-size:0.83rem; margin:4px 0 0; }
+  .line.mono{ font-size:0.76rem; color:var(--text-faint); }
+  .row .btns{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .btn.navy{ background:var(--navy); border-color:var(--navy); color:#fff; }
+  .control{ display:flex; align-items:center; gap:10px; }
+  .state-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap; }
+  .state-label.on{ color:var(--accent); } .state-label.off{ color:var(--off); }
+  .switch{ position:relative; width:44px; height:25px; flex-shrink:0; border-radius:999px; border:none; cursor:pointer; background:var(--off-soft); transition:background .15s; padding:0; }
+  .switch::after{ content:''; position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s; }
   .switch.active{ background:var(--accent); }
   .switch.active::after{ transform:translateX(19px); }
   .switch:disabled{ opacity:.5; cursor:wait; }
   .switch:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
-  .bridge-pill{ font-size:0.66rem; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:20px; margin-top:6px; display:inline-block; }
-  .bridge-pill.live{ background:var(--accent-soft); color:var(--accent-strong); }
-  .bridge-pill.pending{ background:var(--warn-soft); color:var(--warn); }
+  /* ---- conversa ---- */
+  .chat{ display:flex; flex-direction:column; height:min(70vh,720px); }
+  .chat-log{ flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+  .msg{ max-width:80%; padding:10px 14px; border-radius:14px; font-size:0.9rem; line-height:1.55; word-wrap:break-word; }
+  .msg.user{ align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; white-space:pre-wrap; }
+  .msg.assistant{ align-self:flex-start; background:var(--surface-2); border:1px solid var(--border); border-bottom-left-radius:4px; }
+  .msg.assistant.err{ border-color:var(--danger); }
+  .msg .at{ display:block; font-size:0.68rem; opacity:.7; margin-top:4px; }
+  .msg .files{ margin-top:6px; font-size:0.78rem; opacity:.9; }
+  .msg.typing{ color:var(--text-faint); font-style:italic; }
+  .md p{ margin:0 0 8px; } .md p:last-child{ margin-bottom:0; }
+  .md ul{ margin:4px 0 8px; padding-left:20px; }
+  .md code{ font-family:'IBM Plex Mono',monospace; font-size:0.82em; background:var(--off-soft); padding:1px 4px; border-radius:4px; }
+  .md pre{ background:var(--off-soft); padding:10px; border-radius:8px; overflow-x:auto; font-size:0.8rem; white-space:pre-wrap; }
+  .composer{ border-top:1px solid var(--border); padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .composer textarea{ margin:0; min-height:56px; max-height:200px; }
+  .composer .bar{ display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap; }
+  .chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .chip{ font-size:0.76rem; background:var(--off-soft); border-radius:999px; padding:3px 10px; display:inline-flex; gap:6px; align-items:center; }
+  .chip button{ background:none; border:none; cursor:pointer; color:var(--text-muted); padding:0; font-size:0.9rem; line-height:1; }
+  .chip.up{ opacity:.6; }
 
-  .log{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:6px 20px; }
-  .log-item{ display:grid; grid-template-columns:150px 1fr auto; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); font-size:0.84rem; }
-  .log-item:last-child{ border-bottom:none; }
-  .log-item .when{ font-family:'IBM Plex Mono',monospace; color:var(--text-faint); font-size:0.76rem; }
-  .log-item .who{ color:var(--text-muted); font-size:0.76rem; }
-  .empty{ color:var(--text-faint); font-size:0.86rem; padding:16px 0; }
+  /* ---- tarefas ---- */
+  .task-status{ white-space:nowrap; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+
+  /* ---- auditoria ---- */
+  .audit-item{ display:grid; grid-template-columns:150px 90px 1fr; gap:12px; padding:11px 20px; border-bottom:1px solid var(--border); font-size:0.84rem; align-items:baseline; }
+  .audit-item:last-child{ border-bottom:none; }
+  .audit-item .when{ font-family:'IBM Plex Mono',monospace; color:var(--text-faint); font-size:0.74rem; }
+  .audit-item .who{ color:var(--text-muted); font-size:0.76rem; display:block; }
+
+  /* ---- pendências ---- */
+  .pending-list{ border:1px solid var(--warn); }
+  .pending-item{ padding:16px 20px; border-bottom:1px solid var(--border); }
+  .pending-item:last-child{ border-bottom:none; }
+  .pending-item .preview{ font-size:0.85rem; color:var(--text-muted); margin-top:8px; max-width:70ch; }
+  .pending-item .preview b{ color:var(--text); }
+
+  /* ---- modal ---- */
+  .modal-overlay{ position:fixed; inset:0; background:rgba(20,17,10,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:26px; max-width:640px; width:100%; max-height:88vh; overflow-y:auto; }
+  .modal-card h3{ font-size:1.1rem; font-weight:600; margin-bottom:6px; }
+  .modal-card .sub{ font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--text-faint); margin-bottom:14px; }
+  .modal-card ol{ padding-left:20px; }
+  .modal-card ol > li{ margin-bottom:12px; font-weight:600; font-size:0.9rem; }
+  .modal-card ol > li::marker{ color:var(--accent); }
+  .modal-card ol ul{ padding-left:18px; margin:6px 0 0; }
+  .modal-card ol ul li{ font-weight:400; color:var(--text-muted); font-size:0.86rem; }
+  .block-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); margin:16px 0 6px; font-weight:600; }
+  pre.box{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-family:'IBM Plex Mono',monospace; font-size:0.78rem; line-height:1.6; white-space:pre-wrap; word-break:break-word; margin:0; max-height:300px; overflow-y:auto; }
+  .modal-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
 
   footer{ margin-top:56px; padding-top:18px; border-top:1px solid var(--border); font-size:0.78rem; color:var(--text-faint); }
 
-  /* ---- routine info popup ---- */
-  .modal-overlay{ position:fixed; inset:0; background:rgba(20,17,10,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
-  .modal-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:28px; max-width:520px; width:100%; max-height:82vh; overflow-y:auto; }
-  .modal-card .glyph{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:var(--surface-2); border:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:var(--text-muted); margin-bottom:12px; }
-  .modal-card h3{ font-size:1.1rem; font-weight:600; }
-  .modal-card .modal-schedule{ font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--text-faint); margin:8px 0 16px; }
-  .modal-card p.modal-desc{ font-size:0.9rem; color:var(--text); line-height:1.6; margin:0; }
-  .modal-card ol.modal-steps{ margin:18px 0 0; padding-left:20px; }
-  .modal-card ol.modal-steps > li{ margin-bottom:14px; font-size:0.9rem; color:var(--text); font-weight:600; }
-  .modal-card ol.modal-steps > li::marker{ color:var(--accent); font-weight:600; }
-  .modal-card ol.modal-steps ul{ margin:6px 0 0; padding-left:18px; }
-  .modal-card ol.modal-steps ul li{ margin-bottom:3px; font-size:0.87rem; color:var(--text-muted); font-weight:400; }
-  .modal-prompt-block{ margin-top:18px; }
-  .modal-prompt-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); margin-bottom:6px; font-weight:600; }
-  .modal-prompt{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:0.78rem; line-height:1.6; color:var(--text); white-space:pre-wrap; word-break:break-word; margin:0; max-height:280px; overflow-y:auto; }
-  .modal-close{ margin-top:22px; padding:9px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.86rem; font-weight:500; cursor:pointer; }
-  .modal-close:hover{ background:var(--off-soft); }
-
-  /* ---- pendências da Alice ---- */
-  .count-pill{ display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:var(--warn); color:#fff; font-size:0.72rem; font-weight:700; margin-left:8px; }
-  .pending-list{ background:var(--surface); border:1px solid var(--warn); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; }
-  .pending-item{ padding:16px 20px; border-bottom:1px solid var(--border); }
-  .pending-item:last-child{ border-bottom:none; }
-  .pending-item .row-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .pending-item .type-pill{ font-size:0.66rem; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:20px; background:var(--warn-soft); color:var(--warn); font-weight:700; }
-  .pending-item h3{ font-size:0.92rem; font-weight:600; margin:0; }
-  .pending-item .meta{ font-family:'IBM Plex Mono',monospace; font-size:0.74rem; color:var(--text-faint); margin-top:6px; }
-  .pending-item .preview{ font-size:0.85rem; color:var(--text-muted); margin-top:8px; line-height:1.5; max-width:70ch; }
-  .pending-item .preview strong{ color:var(--text); font-weight:600; }
-  .pending-actions{ display:flex; gap:10px; margin-top:12px; }
-  .btn-approve, .btn-reject{ padding:7px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; border:none; }
-  .btn-approve{ background:var(--accent); color:#fff; }
-  .btn-approve:hover{ background:var(--accent-strong); }
-  .btn-reject{ background:var(--surface-2); color:var(--danger); border:1px solid var(--border); }
-  .btn-reject:hover{ background:var(--danger-soft); }
-  .btn-approve:disabled, .btn-reject:disabled{ opacity:.5; cursor:wait; }
-
-  @media (max-width:560px){
+  @media (max-width:640px){
     .status-bar{ flex-direction:column; align-items:flex-start; }
-    .routine{ grid-template-columns:auto 1fr; row-gap:12px; }
-    .routine .control{ grid-column:1/3; justify-self:start; }
-    .log-item{ grid-template-columns:1fr; gap:2px; }
+    .status-meta div{ text-align:left; }
+    .row{ grid-template-columns:auto 1fr; }
+    .row .control{ grid-column:1/3; }
+    .audit-item{ grid-template-columns:1fr; gap:2px; }
+    .grid2{ grid-template-columns:1fr; }
+    .msg{ max-width:92%; }
   }
 </style>
 </head>
 <body>
 
 <!-- ============ LOGIN ============ -->
-<div id="login-view">
+<div id="login-view" hidden>
   <div class="login-card">
-    <span class="status-dot" aria-hidden="true"></span>
+    <span class="status-dot" aria-hidden="true" style="margin-bottom:14px"></span>
     <h1>Torre de Controle</h1>
-    <p class="sub">Entre para acompanhar e ativar as rotinas da Alice.</p>
+    <p class="sub">Entre para acompanhar, conversar e acionar a Alice.</p>
     <form id="login-form">
       <label for="username">Usuário</label>
       <input type="text" id="username" autocomplete="username" required>
       <label for="password">Senha</label>
       <input type="password" id="password" autocomplete="current-password" required>
-      <div class="error-msg" id="login-error"></div>
-      <button type="submit" class="primary" id="login-btn">Entrar</button>
+      <div class="error-msg" id="login-error" role="alert"></div>
+      <button type="submit" class="btn primary block" id="login-btn">Entrar</button>
     </form>
   </div>
 </div>
 
-<!-- ============ DASHBOARD ============ -->
+<!-- ============ PAINEL ============ -->
 <div class="wrap" id="dashboard-view" hidden>
-
   <div class="status-bar">
     <div class="id">
-      <span class="status-dot" aria-hidden="true"></span>
+      <span class="status-dot off" id="conn-dot" aria-hidden="true"></span>
       <div>
-        <h1>Agente IA · Telegram</h1>
-        <div class="subtitle">Conectado ao cérebro principal de IA da empresa</div>
+        <h1>Alice · Agente IA</h1>
+        <div class="subtitle" id="health-pills"><span>Verificando conexões…</span></div>
       </div>
     </div>
     <div class="status-meta">
-      <div>
-        <div class="k">Rotinas ligadas</div>
-        <div class="v mono" id="onCount">—</div>
-      </div>
-      <div>
-        <div class="k">Sessão</div>
-        <div class="v" id="whoami">—</div>
-      </div>
-      <div><button class="logout-link" id="logout-btn">sair</button></div>
+      <div><div class="k">Rotinas ligadas</div><div class="v mono" id="onCount">—</div></div>
+      <div><div class="k">Sessão</div><div class="v" id="whoami">—</div></div>
+      <div><button class="linkish" id="logout-btn">Sair</button></div>
     </div>
-  </div>
-
-  <div class="note" id="bridge-note">
-    <strong>Sobre o botão ligar/desligar:</strong> o estado é salvo de verdade e compartilhado com todo o time.
-    A ligação com a Alice ainda depende de um webhook configurado do lado do OpenClaw — enquanto ele não existir,
-    o interruptor registra sua decisão (e fica visível pra todo mundo), mas não pausa a execução dela sozinho.
   </div>
 
   <div class="section" id="pending-section" hidden>
-    <div class="section-head">
-      <div>
-        <h2>Pendências da Alice<span class="count-pill" id="pendingCount">0</span></h2>
-        <p>Rotinas novas ou alterações que a Alice propôs sozinha — só valem depois que você aprovar aqui.</p>
-      </div>
-    </div>
-    <div class="pending-list" id="pendingList"></div>
+    <div class="section-head"><div>
+      <h2>Pendências da Alice <span class="pill warn" id="pendingCount">0</span></h2>
+      <p>Rotinas novas ou alterações que a Alice propôs — só valem depois que alguém aprovar aqui.</p>
+    </div></div>
+    <div class="card pending-list" id="pendingList"></div>
   </div>
 
-  <div class="section">
-    <div class="section-head">
-      <div>
-        <h2>Rotinas programadas</h2>
-        <p>Ligar/desligar aqui grava no backend e fica visível para todo o time.</p>
-      </div>
-    </div>
-    <div class="routines" id="routineList">
-      <div class="empty">Carregando…</div>
-    </div>
-  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="chat" aria-selected="true">Conversa</button>
+    <button class="tab" role="tab" data-tab="tasks" aria-selected="false">Tarefas</button>
+    <button class="tab" role="tab" data-tab="routines" aria-selected="false">Rotinas</button>
+    <button class="tab" role="tab" data-tab="audit" aria-selected="false">Auditoria</button>
+  </nav>
 
-  <div class="section">
+  <!-- ----- Conversa ----- -->
+  <section id="tab-chat" role="tabpanel">
+    <div class="card chat">
+      <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">Carregando conversa…</div></div>
+      <form class="composer" id="chat-form">
+        <div class="chips" id="chatChips"></div>
+        <textarea id="chatInput" placeholder="Escreva para a Alice… (Enter envia, Shift+Enter quebra linha)" aria-label="Mensagem para a Alice"></textarea>
+        <div class="bar">
+          <div class="actions">
+            <label class="btn small" style="margin:0">📎 Anexar<input type="file" id="chatFile" multiple hidden></label>
+            <button type="button" class="btn small" id="chat-reset">Nova conversa</button>
+          </div>
+          <button type="submit" class="btn primary" id="chat-send">Enviar</button>
+        </div>
+      </form>
+    </div>
+    <p class="note">A conversa daqui é separada da do Telegram (a Alice não vê uma na outra). Para trabalhos demorados — análise de base, planilhas grandes — use <strong>Tarefas</strong>: a Alice trabalha em segundo plano e o resultado fica registrado.</p>
+  </section>
+
+  <!-- ----- Tarefas ----- -->
+  <section id="tab-tasks" role="tabpanel" hidden>
+    <div class="card pad">
+      <h2 style="font-size:1.1rem;margin-bottom:14px">Pedir uma atividade à Alice</h2>
+      <form id="task-form">
+        <div class="grid2">
+          <div>
+            <label for="taskTitle">Título</label>
+            <input type="text" id="taskTitle" maxlength="150" required placeholder="Ex.: Análise da base de cobrança de hoje">
+          </div>
+          <div>
+            <label for="taskRoutine">Rotina relacionada (opcional)</label>
+            <select id="taskRoutine"><option value="">— nenhuma —</option></select>
+          </div>
+        </div>
+        <label for="taskDesc">O que a Alice deve fazer</label>
+        <textarea id="taskDesc" rows="7" maxlength="10000" required placeholder="Descreva a atividade, o resultado esperado e para quem enviar, se for o caso."></textarea>
+        <div class="chips" id="taskChips" style="margin-bottom:12px"></div>
+        <div class="error-msg" id="task-error" role="alert"></div>
+        <div class="actions" style="justify-content:space-between">
+          <label class="btn" style="margin:0">📎 Anexar arquivos<input type="file" id="taskFile" multiple hidden></label>
+          <button type="submit" class="btn primary" id="task-send">Enviar para a Alice</button>
+        </div>
+        <p class="hint" style="margin:10px 0 0">Até 10 arquivos de 20 MB. Os arquivos ficam guardados por 7 dias.</p>
+      </form>
+    </div>
+    <div class="section">
+      <div class="section-head"><div><h2>Tarefas recentes</h2><p>Atualiza sozinho a cada 30 segundos enquanto esta aba estiver aberta.</p></div>
+        <button class="btn small" id="tasks-refresh">Atualizar</button></div>
+      <div class="card" id="taskList"><div class="empty">Carregando…</div></div>
+    </div>
+  </section>
+
+  <!-- ----- Rotinas ----- -->
+  <section id="tab-routines" role="tabpanel" hidden>
     <div class="section-head">
-      <div>
-        <h2>Últimas ações</h2>
-        <p>Quem ligou ou desligou o quê, e quando.</p>
+      <div><h2>Rotinas programadas</h2><p>Ligar/desligar fica registrado na auditoria. A Alice consulta este estado antes de rodar cada rotina.</p></div>
+      <div class="actions">
+        <button class="btn small" id="routine-new">Nova rotina</button>
+        <label class="btn small" style="margin:0">Importar JSON<input type="file" id="routine-import" accept="application/json,.json" hidden></label>
       </div>
     </div>
-    <div class="log" id="logList">
-      <div class="empty">Carregando…</div>
+    <div class="card" id="routineList"><div class="empty">Carregando…</div></div>
+  </section>
+
+  <!-- ----- Auditoria ----- -->
+  <section id="tab-audit" role="tabpanel" hidden>
+    <div class="section-head">
+      <div><h2>Auditoria</h2><p>Tudo o que aconteceu: execuções reportadas pela Alice, rotinas atrasadas, tarefas, liga/desliga, aprovações e logins. Falhas chegam por e-mail na hora; o resumo do dia sai às 18:30.</p></div>
+      <div class="actions">
+        <select id="audit-filter" style="margin:0;width:auto">
+          <option value="">Tudo</option>
+          <option value="error">Só falhas</option>
+          <option value="warn">Falhas e atenção</option>
+          <option value="run">Execuções de rotinas</option>
+          <option value="task">Tarefas</option>
+        </select>
+        <button class="btn small" id="audit-test-email">E-mail de teste</button>
+      </div>
     </div>
-  </div>
+    <div class="card" id="auditList"><div class="empty">Carregando…</div></div>
+    <div style="text-align:center;margin-top:14px"><button class="btn small" id="audit-more" hidden>Carregar mais</button></div>
+  </section>
 
   <footer>Torre de Controle · painel de acompanhamento da Alice.</footer>
 </div>
 
-<!-- ============ POPUP: informações da rotina ============ -->
-<div class="modal-overlay" id="routine-modal" hidden>
+<!-- ============ MODAL genérico ============ -->
+<div class="modal-overlay" id="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <div class="glyph" id="modal-glyph"></div>
     <h3 id="modal-title"></h3>
-    <div class="modal-schedule" id="modal-schedule"></div>
-    <p class="modal-desc" id="modal-desc"></p>
-    <ol class="modal-steps" id="modal-steps" hidden></ol>
-    <div class="modal-prompt-block" id="modal-prompt-block" hidden>
-      <div class="modal-prompt-label">Prompt utilizado</div>
-      <pre class="modal-prompt" id="modal-prompt"></pre>
-    </div>
-    <button class="modal-close" id="modal-close">Fechar</button>
+    <div id="modal-body"></div>
   </div>
 </div>
 
 <script>
-  // Aponte para a URL do seu Worker publicado (veja worker/README.md).
-  const API_BASE = window.TORRE_API_BASE || "https://torre-de-controle-api.alice-fontes.workers.dev";
+"use strict";
+// URL da API (Cloudflare Worker). Para testar outra, defina window.TORRE_API_BASE antes deste script.
+const API_BASE = window.TORRE_API_BASE || "https://torre-de-controle-api.alice-fontes.workers.dev";
+const TOKEN_KEY = "torre_token";
+const DAYS = ["", "seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
 
-  const loginView = document.getElementById('login-view');
-  const dashView = document.getElementById('dashboard-view');
-  const loginForm = document.getElementById('login-form');
-  const loginError = document.getElementById('login-error');
-  const loginBtn = document.getElementById('login-btn');
+// ------------------------------------------------------------ utilidades
+const $ = (id) => document.getElementById(id);
 
-  async function api(path, opts = {}) {
-    const res = await fetch(API_BASE + path, {
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      ...opts,
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || ('Erro ' + res.status));
-    }
-    return res.json();
+/** Cria elementos com segurança: texto entra sempre como textContent. */
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "html") el.innerHTML = v; // usar só com conteúdo já escapado
+    else el.setAttribute(k, v === true ? "" : v);
   }
+  for (const c of children.flat(Infinity)) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
 
-  async function checkSession() {
-    try {
-      const { authenticated, username } = await api('/api/session');
-      if (authenticated) {
-        showDashboard(username);
-      } else {
-        showLogin();
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/** Markdown simples (negrito, código, listas, links) aplicado sobre texto JÁ escapado. */
+function md(text) {
+  const blocks = esc(text || "").split(/```/);
+  return blocks
+    .map((chunk, i) => {
+      if (i % 2) return `<pre>${chunk.replace(/^\w*\n/, "")}</pre>`;
+      return chunk
+        .split(/\n{2,}/)
+        .map((para) => {
+          const lines = para.split("\n");
+          const inline = (s) =>
+            s
+              .replace(/`([^`]+)`/g, "<code>$1</code>")
+              .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+              .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+          if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) {
+            return "<ul>" + lines.map((l) => `<li>${inline(l.replace(/^\s*[-*•]\s+/, ""))}</li>`).join("") + "</ul>";
+          }
+          return para.trim() ? `<p>${lines.map(inline).join("<br>")}</p>` : "";
+        })
+        .join("");
+    })
+    .join("");
+}
+
+function fmtDate(iso) {
+  return iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+}
+function fmtSize(n) {
+  return n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+}
+
+function token() { return localStorage.getItem(TOKEN_KEY); }
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (opts.json !== undefined) headers["Content-Type"] = "application/json";
+  const t = token();
+  if (t) headers.Authorization = "Bearer " + t;
+  let res;
+  try {
+    res = await fetch(API_BASE + path, { method: opts.method || (opts.json !== undefined || opts.body ? "POST" : "GET"), headers, body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body });
+  } catch (e) {
+    throw new Error("sem conexão com o servidor da Torre");
+  }
+  if (res.status === 401 && path !== "/api/login") {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin("Sua sessão expirou. Entre de novo.");
+    throw new Error("sessão expirada");
+  }
+  if (opts.raw) {
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "erro " + res.status);
+    return res;
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || "erro " + res.status);
+  return body;
+}
+
+// ------------------------------------------------------------ modal
+function openModal(title, ...content) {
+  $("modal-title").textContent = title;
+  const body = $("modal-body");
+  body.replaceChildren(...content.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
+  $("modal").hidden = false;
+}
+function closeModal() { $("modal").hidden = true; $("modal-body").replaceChildren(); }
+$("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("modal").hidden) closeModal(); });
+const closeBtn = (label = "Fechar") => h("button", { class: "btn", type: "button", onclick: closeModal }, label);
+
+// ------------------------------------------------------------ login
+function showLogin(msg) {
+  $("login-view").hidden = false;
+  $("dashboard-view").hidden = true;
+  $("login-error").textContent = msg || "";
+  stopPolling();
+}
+
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("login-error").textContent = "";
+  $("login-btn").disabled = true;
+  try {
+    const data = await api("/api/login", { json: { username: $("username").value.trim(), password: $("password").value } });
+    localStorage.setItem(TOKEN_KEY, data.token);
+    $("password").value = "";
+    await showDashboard(data.username);
+  } catch (err) {
+    $("login-error").textContent = /inválid/.test(err.message) ? "Usuário ou senha inválidos." : err.message.charAt(0).toUpperCase() + err.message.slice(1) + ".";
+  } finally {
+    $("login-btn").disabled = false;
+  }
+});
+
+$("logout-btn").addEventListener("click", () => {
+  localStorage.removeItem(TOKEN_KEY);
+  $("chatLog").replaceChildren();
+  showLogin();
+});
+
+async function boot() {
+  if (!token()) return showLogin();
+  try {
+    const { username } = await api("/api/session");
+    await showDashboard(username);
+  } catch (e) {
+    if (e.message !== "sessão expirada") showLogin("Não consegui falar com a Torre: " + e.message);
+  }
+}
+
+async function showDashboard(username) {
+  $("login-view").hidden = true;
+  $("dashboard-view").hidden = false;
+  $("whoami").textContent = username;
+  loadHealth();
+  await Promise.all([loadRoutines(), loadPending(), loadChat()]);
+  startPolling();
+}
+
+// ------------------------------------------------------------ abas
+let currentTab = "chat";
+document.querySelectorAll(".tab").forEach((t) =>
+  t.addEventListener("click", () => selectTab(t.dataset.tab))
+);
+function selectTab(name) {
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === name)));
+  ["chat", "tasks", "routines", "audit"].forEach((n) => ($("tab-" + n).hidden = n !== name));
+  if (name === "tasks") loadTasks();
+  if (name === "routines") loadRoutines();
+  if (name === "audit") loadAudit(true);
+}
+
+let pollTimer = null;
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(() => {
+    if (document.hidden) return;
+    if (currentTab === "tasks") loadTasks();
+    loadPending();
+  }, 30000);
+}
+function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
+
+// ------------------------------------------------------------ saúde das conexões
+async function loadHealth() {
+  try {
+    const hl = await api("/api/health");
+    const pill = (label, cls, title) => h("span", { class: "pill " + cls, title }, label);
+    const chat = !hl.chat.configured ? pill("Conversa: não configurada", "off", "Falta configurar o OpenClaw (veja setup/CONFIGURAR.md)")
+      : hl.chat.online ? pill("Conversa: online", "ok") : pill("Conversa: fora do ar", "bad", hl.chat.reason || "");
+    const tasks = hl.tasks.configured ? pill("Tarefas: ligadas", "ok") : pill("Tarefas: não configuradas", "off");
+    const mail = hl.mail.configured ? pill("E-mail: ligado", "ok") : pill("E-mail: não configurado", "off");
+    $("health-pills").replaceChildren(chat, tasks, mail);
+    $("conn-dot").className = "status-dot" + (!hl.chat.configured ? " off" : hl.chat.online ? "" : " bad");
+  } catch (e) {
+    $("health-pills").replaceChildren(h("span", {}, "Não consegui verificar as conexões"));
+  }
+}
+
+// ------------------------------------------------------------ upload de arquivos
+const MAX_FILE = 20 * 1024 * 1024;
+
+/** Gerencia a lista de anexos de um formulário (chat ou tarefa). */
+function attachments(inputId, chipsId) {
+  const state = { files: [] }; // { id?, name, size, uploading, error }
+  const render = () =>
+    $(chipsId).replaceChildren(
+      ...state.files.map((f, i) =>
+        h("span", { class: "chip" + (f.uploading ? " up" : ""), title: f.error || "" },
+          (f.error ? "⚠ " : f.uploading ? "⏳ " : "📄 ") + f.name + " · " + fmtSize(f.size),
+          h("button", { type: "button", "aria-label": "Remover " + f.name, onclick: () => { state.files.splice(i, 1); render(); } }, "×"))
+      )
+    );
+  $(inputId).addEventListener("change", async (e) => {
+    const picked = [...e.target.files];
+    e.target.value = "";
+    for (const file of picked) {
+      if (state.files.length >= 10) { alert("Máximo de 10 arquivos."); break; }
+      const entry = { name: file.name, size: file.size, uploading: true };
+      if (file.size > MAX_FILE) { entry.uploading = false; entry.error = "maior que 20 MB"; state.files.push(entry); render(); continue; }
+      state.files.push(entry); render();
+      try {
+        const { file: info } = await api("/api/files", { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) } });
+        entry.id = info.id;
+      } catch (err) {
+        entry.error = err.message;
       }
-    } catch (e) {
-      showLogin();
+      entry.uploading = false; render();
     }
-  }
+  });
+  return {
+    ids: () => state.files.filter((f) => f.id).map((f) => f.id),
+    list: () => state.files.filter((f) => f.id),
+    busy: () => state.files.some((f) => f.uploading),
+    hasErrors: () => state.files.some((f) => f.error),
+    clear: () => { state.files = []; render(); },
+  };
+}
 
-  function showLogin() {
-    loginView.hidden = false;
-    dashView.hidden = true;
-  }
+// ------------------------------------------------------------ conversa
+const chatFiles = attachments("chatFile", "chatChips");
+let chatBusy = false;
 
-  async function showDashboard(username) {
-    loginView.hidden = true;
-    dashView.hidden = false;
-    document.getElementById('whoami').textContent = username;
+function chatBubble(m) {
+  if (m.role === "user") {
+    return h("div", { class: "msg user" }, m.text,
+      m.files && m.files.length ? h("div", { class: "files" }, "📎 " + m.files.map((f) => f.name).join(", ")) : null,
+      h("span", { class: "at" }, fmtDate(m.at)));
+  }
+  const el = h("div", { class: "msg assistant md" + (m.error ? " err" : "") });
+  el.innerHTML = md(m.text || (m.error ? "" : "(sem resposta)"));
+  if (m.error) el.append(h("div", { class: "files" }, "⚠ " + m.error));
+  if (m.at) el.append(h("span", { class: "at" }, "Alice · " + fmtDate(m.at)));
+  return el;
+}
+
+async function loadChat() {
+  try {
+    const { messages } = await api("/api/chat");
+    const log = $("chatLog");
+    log.replaceChildren(...(messages.length ? messages.map(chatBubble) : [h("div", { class: "empty" }, "Nenhuma mensagem ainda. Diga oi para a Alice 👋")]));
+    log.scrollTop = log.scrollHeight;
+  } catch (e) {
+    $("chatLog").replaceChildren(h("div", { class: "empty" }, "Não deu pra carregar a conversa: " + e.message));
+  }
+}
+
+$("chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("chat-form").requestSubmit(); }
+});
+
+$("chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("chatInput").value.trim();
+  if (!text || chatBusy) return;
+  if (chatFiles.busy()) return alert("Espere os anexos terminarem de subir.");
+  chatBusy = true; $("chat-send").disabled = true;
+  const log = $("chatLog");
+  log.querySelector(".empty")?.remove();
+  const files = chatFiles.list();
+  log.append(chatBubble({ role: "user", text, files, at: new Date().toISOString() }));
+  const reply = h("div", { class: "msg assistant md typing" }, "Alice está pensando…");
+  log.append(reply); log.scrollTop = log.scrollHeight;
+  $("chatInput").value = "";
+  const ids = chatFiles.ids(); chatFiles.clear();
+
+  let full = "", errorMsg = null;
+  try {
+    const res = await api("/api/chat", { method: "POST", raw: true, json: { message: text, files: ids } });
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const obj = JSON.parse(data);
+          if (obj.error) errorMsg = obj.error.message || "erro na execução";
+          const d = obj.choices?.[0]?.delta?.content;
+          if (typeof d === "string") { full += d; reply.classList.remove("typing"); reply.innerHTML = md(full); log.scrollTop = log.scrollHeight; }
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    errorMsg = err.message;
+  }
+  reply.replaceWith(chatBubble({ role: "assistant", text: full, error: errorMsg, at: new Date().toISOString() }));
+  log.scrollTop = log.scrollHeight;
+  chatBusy = false; $("chat-send").disabled = false; $("chatInput").focus();
+});
+
+$("chat-reset").addEventListener("click", async () => {
+  if (!confirm("Começar uma conversa nova? A Alice não vai lembrar do que foi dito nesta.")) return;
+  try { await api("/api/chat/reset", { json: {} }); await loadChat(); } catch (e) { alert(e.message); }
+});
+
+// ------------------------------------------------------------ tarefas
+const taskFiles = attachments("taskFile", "taskChips");
+const TASK_LABEL = { queued: ["na fila", "off"], sent: ["enviada", "warn"], running: ["em andamento", "warn"], done: ["concluída", "ok"], error: ["falhou", "bad"], send_failed: ["não enviada", "bad"] };
+const taskPill = (s) => h("span", { class: "pill task-status " + (TASK_LABEL[s]?.[1] || "off") }, TASK_LABEL[s]?.[0] || s);
+
+$("task-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("task-error").textContent = "";
+  if (taskFiles.busy()) return ($("task-error").textContent = "Espere os anexos terminarem de subir.");
+  if (taskFiles.hasErrors()) return ($("task-error").textContent = "Remova os anexos com erro antes de enviar.");
+  $("task-send").disabled = true;
+  try {
+    const out = await api("/api/tasks", { json: { title: $("taskTitle").value.trim(), description: $("taskDesc").value.trim(), routineId: $("taskRoutine").value || undefined, files: taskFiles.ids() } });
+    if (!out.ok) $("task-error").textContent = "A tarefa foi registrada, mas não chegou na Alice: " + out.error;
+    $("taskTitle").value = ""; $("taskDesc").value = ""; $("taskRoutine").value = ""; taskFiles.clear();
+    await loadTasks();
+  } catch (err) {
+    $("task-error").textContent = err.message;
+  } finally {
+    $("task-send").disabled = false;
+  }
+});
+$("tasks-refresh").addEventListener("click", loadTasks);
+
+async function loadTasks() {
+  try {
+    const { tasks } = await api("/api/tasks");
+    $("taskList").replaceChildren(...(tasks.length ? tasks.map((t) =>
+      h("div", { class: "row" },
+        h("div", { class: "glyph" }, "T"),
+        h("div", {},
+          h("h3", {}, t.title),
+          h("p", { class: "line mono" }, `por ${t.createdBy} · ${fmtDate(t.createdAt)}${t.files ? ` · ${t.files} anexo(s)` : ""}`),
+          h("div", { class: "btns" }, h("button", { class: "btn small", type: "button", onclick: () => openTask(t.id) }, "Ver detalhes"))),
+        h("div", { class: "control" }, taskPill(t.status)))
+    ) : [h("div", { class: "empty" }, "Nenhuma tarefa ainda.")]));
+  } catch (e) {
+    $("taskList").replaceChildren(h("div", { class: "empty" }, "Não deu pra carregar: " + e.message));
+  }
+}
+
+function fileLinks(files) {
+  return h("ul", {}, files.map((f) => h("li", {}, f.url ? h("a", { href: f.url, target: "_blank", rel: "noopener noreferrer" }, f.name) : f.name + " (expirado)", " · " + fmtSize(f.size || 0))));
+}
+
+async function openTask(id) {
+  try {
+    const t = await api("/api/tasks/" + encodeURIComponent(id));
+    const result = h("div", { class: "md" }); result.innerHTML = md(t.result || "");
+    const parts = [
+      h("div", { class: "sub" }, `${t.id} · por ${t.createdBy} · ${fmtDate(t.createdAt)}`),
+      taskPill(t.status),
+      t.routineName ? h("p", { class: "line" }, "Rotina: " + t.routineName) : null,
+      h("div", { class: "block-label" }, "Pedido"), h("pre", { class: "box" }, t.description),
+      t.files?.length ? [h("div", { class: "block-label" }, "Arquivos enviados"), fileLinks(t.files)] : null,
+      t.error ? [h("div", { class: "block-label" }, "Erro no envio"), h("pre", { class: "box" }, t.error)] : null,
+      t.result ? [h("div", { class: "block-label" }, "Resultado da Alice"), result] : null,
+      t.resultFiles?.length ? [h("div", { class: "block-label" }, "Arquivos de resultado"), fileLinks(t.resultFiles)] : null,
+      h("div", { class: "block-label" }, "Histórico"),
+      h("ul", {}, (t.history || []).map((x) => h("li", { class: "line" }, `${fmtDate(x.at)} — ${TASK_LABEL[x.status]?.[0] || x.status} (${x.by})${x.note ? ": " + x.note : ""}`))),
+    ];
+    const actions = h("div", { class: "modal-actions" });
+    if (["send_failed", "error", "sent", "queued"].includes(t.status)) {
+      actions.append(h("button", { class: "btn", type: "button", onclick: async (e) => {
+        e.target.disabled = true;
+        try { const out = await api(`/api/tasks/${encodeURIComponent(t.id)}/resend`, { json: {} }); if (!out.ok) alert("Não foi: " + out.error); closeModal(); loadTasks(); }
+        catch (err) { alert(err.message); e.target.disabled = false; }
+      } }, "Reenviar para a Alice"));
+    }
+    actions.append(closeBtn());
+    openModal(t.title, parts, actions);
+  } catch (e) { alert(e.message); }
+}
+
+// ------------------------------------------------------------ rotinas
+let routines = [];
+
+function checksText(checks) {
+  return (checks || []).map((c) => `${c.days.map((d) => DAYS[d]).join(", ")} até ${c.by}`).join(" · ");
+}
+
+function lastRunText(lr) {
+  if (!lr) return "Sem execução reportada ainda";
+  const label = { started: "iniciou", ok: "concluiu", error: "falhou", skipped: "pulou", wait: "aguardando" }[lr.status] || lr.status;
+  return `Última execução: ${label} · ${fmtDate(lr.at)}${lr.summary ? " — " + lr.summary : ""}`;
+}
+
+async function loadRoutines() {
+  try {
+    ({ routines } = await api("/api/routines"));
+    renderRoutines();
+  } catch (e) {
+    $("routineList").replaceChildren(h("div", { class: "empty" }, "Não deu pra carregar: " + e.message));
+  }
+}
+
+function renderRoutines() {
+  $("onCount").textContent = `${routines.filter((r) => r.on).length} de ${routines.length}`;
+  const sel = $("taskRoutine"), keep = sel.value;
+  sel.replaceChildren(h("option", { value: "" }, "— nenhuma —"), ...routines.map((r) => h("option", { value: r.id }, r.name)));
+  sel.value = keep;
+
+  if (!routines.length) {
+    $("routineList").replaceChildren(h("div", { class: "empty" }, "Nenhuma rotina cadastrada. Use “Importar JSON” com o arquivo rotinas-seed.json ou “Nova rotina”."));
+    return;
+  }
+  $("routineList").replaceChildren(...routines.map((r, i) => {
+    const sw = h("button", { class: "switch" + (r.on ? " active" : ""), role: "switch", "aria-checked": String(r.on), "aria-label": "Ligar ou desligar " + r.name });
+    sw.addEventListener("click", async () => {
+      sw.disabled = true;
+      try {
+        const out = await api(`/api/routines/${r.id}/state`, { json: { on: !r.on } });
+        if (out.bridgeError) alert("Estado salvo, mas o aviso ao webhook falhou: " + out.bridgeError);
+        await loadRoutines();
+      } catch (err) { alert("Não deu pra atualizar agora: " + err.message); sw.disabled = false; }
+    });
+    const lrBad = r.lastRun && r.lastRun.status === "error";
+    return h("div", { class: "row" },
+      h("div", { class: "glyph" }, "R-" + String(i + 1).padStart(2, "0")),
+      h("div", {},
+        h("h3", {}, r.name),
+        r.note ? h("p", { class: "line" }, r.note) : null,
+        h("p", { class: "line mono" }, r.schedule),
+        r.checks?.length ? h("p", { class: "line mono" }, "Conferência: " + checksText(r.checks)) : null,
+        h("p", { class: "line", style: lrBad ? "color:var(--danger)" : null }, lastRunText(r.lastRun)),
+        h("div", { class: "btns" },
+          h("button", { class: "btn small navy", type: "button", onclick: () => routineInfo(r) }, "Informações"),
+          h("button", { class: "btn small", type: "button", onclick: () => askRun(r) }, "Pedir execução agora"),
+          h("button", { class: "btn small", type: "button", onclick: () => routineEditor(r) }, "Editar"))),
+      h("div", { class: "control" }, h("span", { class: "state-label " + (r.on ? "on" : "off") }, r.on ? "ligada" : "desligada"), sw));
+  }));
+}
+
+function stepsList(steps) {
+  return h("ol", {}, steps.map((s) => h("li", {}, s.title, h("ul", {}, s.items.map((it) => h("li", {}, it))))));
+}
+
+function routineInfo(r) {
+  openModal(r.name,
+    h("div", { class: "sub" }, r.schedule),
+    h("p", {}, r.description),
+    r.steps?.length ? stepsList(r.steps) : null,
+    r.prompt ? [h("div", { class: "block-label" }, "Prompt utilizado"), h("pre", { class: "box" }, r.prompt)] : null,
+    h("div", { class: "block-label" }, "Registro"),
+    h("p", { class: "line" }, `Criada por ${r.createdBy || "—"}${r.updatedBy ? ` · última edição por ${r.updatedBy} em ${fmtDate(r.updatedAt)}` : ""}`),
+    h("div", { class: "modal-actions" }, closeBtn()));
+}
+
+function askRun(r) {
+  selectTab("tasks");
+  $("taskRoutine").value = r.id;
+  $("taskTitle").value = "Executar agora: " + r.name;
+  $("taskDesc").value = `Execute agora a rotina "${r.name}" (id ${r.id}), seguindo o passo a passo cadastrado na Torre.` + (r.prompt ? "\n\nInstruções da rotina:\n" + r.prompt : "");
+  $("taskDesc").focus();
+}
+
+// --- editor de rotina (texto simples para passos e conferências)
+function stepsToText(steps) {
+  return (steps || []).map((s) => "## " + s.title + "\n" + s.items.map((i) => "- " + i).join("\n")).join("\n\n");
+}
+function textToSteps(text) {
+  const out = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("## ")) out.push({ title: line.slice(3).trim(), items: [] });
+    else if (/^[-*•]\s+/.test(line)) {
+      if (!out.length) out.push({ title: "Passos", items: [] });
+      out[out.length - 1].items.push(line.replace(/^[-*•]\s+/, ""));
+    } else throw new Error(`Linha do passo a passo não reconhecida: "${line}". Use "## Título" e "- item".`);
+  }
+  return out;
+}
+function checksToText(checks) {
+  return (checks || []).map((c) => c.days.join(",") + " " + c.by).join("\n");
+}
+function textToChecks(text) {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^([1-7](?:\s*,\s*[1-7])*)\s+(\d{2}:\d{2})$/);
+    if (!m) throw new Error(`Conferência inválida: "${l}". Formato: dias e horário, ex. "2,4 17:30".`);
+    return { days: m[1].split(",").map((d) => Number(d.trim())), by: m[2] };
+  });
+}
+
+function routineEditor(r) {
+  const isNew = !r;
+  r = r || { id: "", name: "", schedule: "", description: "", note: "", prompt: "", steps: [], checks: [], defaultOn: true };
+  const f = {
+    id: h("input", { type: "text", value: r.id, disabled: !isNew, placeholder: "ex.: revisar-boletos" }),
+    name: h("input", { type: "text", value: r.name }),
+    schedule: h("input", { type: "text", value: r.schedule, placeholder: "ex.: dias úteis · 08:00 (America/Sao_Paulo)" }),
+    note: h("input", { type: "text", value: r.note || "" }),
+    description: h("textarea", { rows: 3 }, r.description),
+    steps: h("textarea", { rows: 8, class: "code" }, stepsToText(r.steps)),
+    prompt: h("textarea", { rows: 6, class: "code" }, r.prompt || ""),
+    checks: h("textarea", { rows: 2, class: "code" }, checksToText(r.checks)),
+    defaultOn: h("input", { type: "checkbox", checked: r.defaultOn !== false }),
+  };
+  const err = h("div", { class: "error-msg", role: "alert" });
+  const save = h("button", { class: "btn primary", type: "button" }, "Salvar");
+  save.addEventListener("click", async () => {
+    err.textContent = ""; save.disabled = true;
+    try {
+      const payload = {
+        id: f.id.value.trim(), name: f.name.value.trim(), schedule: f.schedule.value.trim(), note: f.note.value.trim(),
+        description: f.description.value.trim(), prompt: f.prompt.value, steps: textToSteps(f.steps.value),
+        checks: textToChecks(f.checks.value), defaultOn: f.defaultOn.checked,
+      };
+      await api("/api/routines/save", { json: payload });
+      closeModal(); await loadRoutines();
+    } catch (e) { err.textContent = e.message; save.disabled = false; }
+  });
+  const field = (label, el, hint) => [h("label", {}, label), el, hint ? h("p", { class: "hint" }, hint) : null];
+  const actions = h("div", { class: "modal-actions" });
+  if (!isNew) {
+    actions.append(h("button", { class: "btn danger", type: "button", onclick: async () => {
+      if (!confirm(`Excluir a rotina "${r.name}"? Isso fica registrado na auditoria.`)) return;
+      try { await api(`/api/routines/${r.id}/delete`, { json: {} }); closeModal(); loadRoutines(); } catch (e) { err.textContent = e.message; }
+    } }, "Excluir"));
+  }
+  actions.append(closeBtn("Cancelar"), save);
+  openModal(isNew ? "Nova rotina" : "Editar rotina",
+    field("Identificador (não muda depois)", f.id, "Letras minúsculas, números e hífen. A Alice usa este id para reportar execuções."),
+    field("Nome", f.name), field("Periodicidade (texto)", f.schedule), field("Nota", f.note),
+    field("Descrição", f.description),
+    field("Passo a passo", f.steps, 'Use "## Título da etapa" e, abaixo, "- item".'),
+    field("Prompt / modelo de mensagem", f.prompt),
+    field("Conferência de execução", f.checks, 'Uma por linha: dias (1=seg … 7=dom) e horário-limite. Ex.: "2,4 17:30". Se a Alice não reportar até lá, chega alerta por e-mail.'),
+    h("label", { style: "display:flex;gap:8px;align-items:center" }, f.defaultOn, "Ligada por padrão"),
+    err, actions);
+}
+
+$("routine-new").addEventListener("click", () => routineEditor(null));
+$("routine-import").addEventListener("change", async (e) => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const list = Array.isArray(data) ? data : data.routines;
+    if (!confirm(`Importar ${list.length} rotina(s)? Rotinas com o mesmo id serão substituídas.`)) return;
+    const out = await api("/api/routines/import", { json: { routines: list } });
+    alert("Importadas: " + out.imported.join(", "));
     await loadRoutines();
+  } catch (err) { alert("Não deu pra importar: " + err.message); }
+});
+
+// ------------------------------------------------------------ pendências
+async function loadPending() {
+  try {
+    const { pending } = await api("/api/routines/pending");
+    $("pendingCount").textContent = pending.length;
+    $("pending-section").hidden = !pending.length;
+    $("pendingList").replaceChildren(...pending.map((p) => {
+      const title = p.type === "create" ? p.payload.name : (p.current ? p.current.name : p.routineId);
+      const fields = [];
+      const add = (k, v) => fields.push(h("div", {}, h("b", {}, k + ": "), v));
+      if (p.payload.name && p.type === "edit") add("Nome", p.payload.name);
+      if (p.payload.schedule) add("Periodicidade", p.payload.schedule);
+      if (p.payload.note) add("Nota", p.payload.note);
+      if (p.payload.description) add("Descrição", p.payload.description);
+      if (p.payload.steps) add("Passo a passo", `${p.payload.steps.length} etapa(s)`);
+      if (p.payload.prompt) add("Prompt", p.payload.prompt.slice(0, 300) + (p.payload.prompt.length > 300 ? "…" : ""));
+      if ("defaultOn" in p.payload) add("Estado inicial", p.payload.defaultOn ? "ligada" : "desligada");
+      const act = (action) => async (e) => {
+        e.target.closest(".pending-item").querySelectorAll("button").forEach((b) => (b.disabled = true));
+        try { await api(`/api/routines/pending/${p.proposalId}/${action}`, { json: {} }); await Promise.all([loadPending(), loadRoutines()]); }
+        catch (err) { alert(err.message); loadPending(); }
+      };
+      return h("div", { class: "pending-item" },
+        h("div", { class: "actions", style: "align-items:center" }, h("span", { class: "pill warn" }, p.type === "create" ? "Nova rotina" : "Edição"), h("h3", { style: "font-size:.92rem" }, title)),
+        h("div", { class: "line mono" }, `id: ${p.routineId} · proposto pela Alice em ${fmtDate(p.proposedAt)}`),
+        h("div", { class: "preview" }, fields),
+        h("div", { class: "actions", style: "margin-top:12px" },
+          h("button", { class: "btn small primary", type: "button", onclick: act("approve") }, "Aprovar"),
+          h("button", { class: "btn small danger", type: "button", onclick: act("reject") }, "Rejeitar")));
+    }));
+  } catch (_) { /* silencioso: não trava o resto do painel */ }
+}
+
+// ------------------------------------------------------------ auditoria
+let auditCursor = null, auditEvents = [];
+const SEV = { error: ["falha", "bad"], warn: ["atenção", "warn"], info: ["info", "off"] };
+
+async function loadAudit(reset) {
+  if (reset) { auditCursor = null; auditEvents = []; }
+  try {
+    const qs = new URLSearchParams({ limit: "100" });
+    if (auditCursor) qs.set("cursor", auditCursor);
+    const out = await api("/api/audit?" + qs);
+    auditEvents = auditEvents.concat(out.events);
+    auditCursor = out.cursor;
+    $("audit-more").hidden = !auditCursor;
+    renderAudit();
+  } catch (e) {
+    $("auditList").replaceChildren(h("div", { class: "empty" }, "Não deu pra carregar: " + e.message));
   }
+}
 
-  loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    loginError.textContent = '';
-    loginBtn.disabled = true;
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value;
-    try {
-      const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
-      await showDashboard(data.username);
-    } catch (err) {
-      loginError.textContent = 'Usuário ou senha inválidos.';
-    } finally {
-      loginBtn.disabled = false;
-    }
-  });
+function renderAudit() {
+  const f = $("audit-filter").value;
+  const list = auditEvents.filter((e) =>
+    !f ? true : f === "error" ? e.severity === "error" : f === "warn" ? e.severity !== "info" : f === "run" ? (e.type || "").startsWith("run_") : f === "task" ? (e.type || "").startsWith("task_") : true);
+  $("auditList").replaceChildren(...(list.length ? list.map((e) =>
+    h("div", { class: "audit-item" },
+      h("div", { class: "when" }, fmtDate(e.at)),
+      h("div", {}, h("span", { class: "pill " + (SEV[e.severity]?.[1] || "off") }, SEV[e.severity]?.[0] || e.severity)),
+      h("div", {}, e.summary, h("span", { class: "who" }, `${e.actor || ""}${e.type ? " · " + e.type : ""}`)))
+  ) : [h("div", { class: "empty" }, "Nada por aqui ainda.")]));
+}
 
-  document.getElementById('logout-btn').addEventListener('click', async () => {
-    await api('/api/logout', { method: 'POST' }).catch(() => {});
-    showLogin();
-  });
+$("audit-filter").addEventListener("change", renderAudit);
+$("audit-more").addEventListener("click", () => loadAudit(false));
+$("audit-test-email").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try { await api("/api/test-email", { json: {} }); alert("E-mail de teste enviado."); }
+  catch (err) { alert("Não foi: " + err.message); }
+  finally { e.target.disabled = false; }
+});
 
-  let currentRoutines = [];
-
-  function renderRoutines(routines) {
-    currentRoutines = routines;
-    const list = document.getElementById('routineList');
-    list.innerHTML = '';
-    routines.forEach((r, i) => {
-      const glyph = 'R-' + String(i + 1).padStart(2, '0');
-      const row = document.createElement('div');
-      row.className = 'routine';
-      row.innerHTML = `
-        <div class="glyph">${glyph}</div>
-        <div class="info">
-          <h3>${r.name}</h3>
-          ${r.note ? `<p class="context-line">${r.note}</p>` : ''}
-          <p class="schedule-line">${r.schedule}</p>
-          <button class="info-btn" data-id="${r.id}" type="button">Informações da rotina</button>
-        </div>
-        <div class="control">
-          <span class="state-label ${r.on ? 'on' : 'off'}">${r.on ? 'ligada' : 'desligada'}</span>
-          <button class="switch${r.on ? ' active' : ''}" role="switch" aria-checked="${r.on}" aria-label="Ativar ou desativar ${r.name}" data-id="${r.id}"></button>
-        </div>
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll('.switch').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        try {
-          await api(`/api/routines/${btn.dataset.id}/toggle`, { method: 'POST' });
-          await loadRoutines();
-        } catch (err) {
-          alert('Não deu pra atualizar agora: ' + err.message);
-        } finally {
-          btn.disabled = false;
-        }
-      });
-    });
-    list.querySelectorAll('.info-btn').forEach((btn, i) => {
-      btn.addEventListener('click', () => openRoutineModal(btn.dataset.id, i));
-    });
-    document.getElementById('onCount').textContent = routines.filter((r) => r.on).length + ' de ' + routines.length;
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  function openRoutineModal(id, index) {
-    const r = currentRoutines.find((x) => x.id === id);
-    if (!r) return;
-    document.getElementById('modal-glyph').textContent = 'R-' + String(index + 1).padStart(2, '0');
-    document.getElementById('modal-title').textContent = r.name;
-    document.getElementById('modal-schedule').textContent = r.schedule;
-    document.getElementById('modal-desc').textContent = r.description;
-
-    const stepsEl = document.getElementById('modal-steps');
-    if (Array.isArray(r.steps) && r.steps.length) {
-      stepsEl.innerHTML = r.steps.map((step) => `
-        <li>${escapeHtml(step.title)}
-          <ul>${step.items.map((it) => `<li>${escapeHtml(it)}</li>`).join('')}</ul>
-        </li>
-      `).join('');
-      stepsEl.hidden = false;
-    } else {
-      stepsEl.innerHTML = '';
-      stepsEl.hidden = true;
-    }
-
-    const promptBlock = document.getElementById('modal-prompt-block');
-    if (r.prompt) {
-      document.getElementById('modal-prompt').textContent = r.prompt;
-      promptBlock.hidden = false;
-    } else {
-      document.getElementById('modal-prompt').textContent = '';
-      promptBlock.hidden = true;
-    }
-
-    document.getElementById('routine-modal').hidden = false;
-  }
-
-  function closeRoutineModal() {
-    document.getElementById('routine-modal').hidden = true;
-  }
-
-  document.getElementById('modal-close').addEventListener('click', closeRoutineModal);
-  document.getElementById('routine-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'routine-modal') closeRoutineModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeRoutineModal();
-  });
-
-  function renderLog(log) {
-    const list = document.getElementById('logList');
-    if (!log.length) {
-      list.innerHTML = '<div class="empty">Nenhuma ação registrada ainda.</div>';
-      return;
-    }
-    list.innerHTML = log.map((entry) => `
-      <div class="log-item">
-        <div class="when">${new Date(entry.at).toLocaleString('pt-BR')}</div>
-        <div>${entry.routineName} — <strong>${entry.action === 'enable' ? 'ligada' : 'desligada'}</strong></div>
-        <div class="who">por ${entry.by}${entry.bridged ? ' · enviado à Alice' : ' · só registrado aqui'}</div>
-      </div>
-    `).join('');
-  }
-
-  async function loadRoutines() {
-    try {
-      const { routines, log } = await api('/api/routines');
-      renderRoutines(routines);
-      renderLog(log);
-    } catch (err) {
-      document.getElementById('routineList').innerHTML = '<div class="empty">Não deu pra carregar: ' + err.message + '</div>';
-    }
-    await loadPending();
-  }
-
-  function fieldPreview(payload) {
-    const parts = [];
-    if (payload.schedule) parts.push(`<strong>Periodicidade:</strong> ${escapeHtml(payload.schedule)}`);
-    if (payload.note) parts.push(`<strong>Nota:</strong> ${escapeHtml(payload.note)}`);
-    if (payload.description) parts.push(`<strong>Descrição:</strong> ${escapeHtml(payload.description)}`);
-    if (Array.isArray(payload.steps)) parts.push(`<strong>Passo a passo:</strong> ${payload.steps.length} etapa(s)`);
-    if (Object.prototype.hasOwnProperty.call(payload, 'defaultOn')) {
-      parts.push(`<strong>Estado inicial:</strong> ${payload.defaultOn ? 'ligada' : 'desligada'}`);
-    }
-    return parts.map((p) => `<div>${p}</div>`).join('');
-  }
-
-  function renderPending(list) {
-    const section = document.getElementById('pending-section');
-    const container = document.getElementById('pendingList');
-    document.getElementById('pendingCount').textContent = list.length;
-
-    if (!list.length) {
-      section.hidden = true;
-      container.innerHTML = '';
-      return;
-    }
-    section.hidden = false;
-
-    container.innerHTML = list.map((p) => {
-      const title = p.type === 'create' ? escapeHtml(p.payload.name) : escapeHtml(p.current ? p.current.name : p.routineId);
-      const typeLabel = p.type === 'create' ? 'Nova rotina' : 'Edição';
-      return `
-        <div class="pending-item" data-proposal-id="${p.proposalId}">
-          <div class="row-head">
-            <span class="type-pill">${typeLabel}</span>
-            <h3>${title}</h3>
-          </div>
-          <div class="meta">id: ${escapeHtml(p.routineId)} · proposto por Alice em ${new Date(p.proposedAt).toLocaleString('pt-BR')}</div>
-          <div class="preview">${fieldPreview(p.payload)}</div>
-          <div class="pending-actions">
-            <button class="btn-approve" data-action="approve" data-id="${p.proposalId}">Aprovar</button>
-            <button class="btn-reject" data-action="reject" data-id="${p.proposalId}">Rejeitar</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    container.querySelectorAll('button[data-action]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const proposalId = btn.dataset.id;
-        const action = btn.dataset.action;
-        const item = btn.closest('.pending-item');
-        item.querySelectorAll('button').forEach((b) => (b.disabled = true));
-        try {
-          await api(`/api/routines/pending/${proposalId}/${action}`, { method: 'POST' });
-          await loadRoutines();
-        } catch (err) {
-          alert('Não deu pra ' + (action === 'approve' ? 'aprovar' : 'rejeitar') + ' agora: ' + err.message);
-          item.querySelectorAll('button').forEach((b) => (b.disabled = false));
-        }
-      });
-    });
-  }
-
-  async function loadPending() {
-    try {
-      const { pending } = await api('/api/routines/pending');
-      renderPending(pending);
-    } catch (err) {
-      // silencioso — a lista de rotinas já carregou; não trava o resto do painel
-    }
-  }
-
-  checkSession();
+boot();
 </script>
 </body>
 </html>
