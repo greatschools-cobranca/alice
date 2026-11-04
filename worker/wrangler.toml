@@ -2,14 +2,22 @@ name = "torre-de-controle-api"
 main = "src/index.js"
 compatibility_date = "2024-09-01"
 
-# Crie o namespace com:
-#   wrangler kv namespace create ROTINAS
-# e cole o id gerado abaixo.
 kv_namespaces = [
   { binding = "ROTINAS", id = "fb216a84c6eb46f7ac4d6fca964f4705" }
 ]
 
-# Secrets (não vão neste arquivo — configure com `wrangler secret put NOME`):
-#   JWT_SECRET
-#   USERS_JSON
-#   ROUTINE_WEBHOOK_URL   (opcional)
+# A cada 30 min: confere rotinas atrasadas, tarefas paradas e manda o resumo diário (após 18:30 de SP).
+[triggers]
+crons = ["*/30 * * * *"]
+
+[vars]
+ALLOWED_ORIGINS = "https://greatschools-cobranca.github.io"
+PANEL_URL = "https://greatschools-cobranca.github.io/alice/"
+OPENCLAW_AGENT_ID = "main"
+
+# Segredos (não vão neste arquivo — viram GitHub Secrets e o workflow publica; veja setup/CONFIGURAR.md):
+#   JWT_SECRET, USERS_JSON, ALICE_API_KEY
+#   OPENCLAW_BASE_URL, OPENCLAW_GATEWAY_TOKEN, OPENCLAW_HOOKS_TOKEN
+#   CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET   (se o gateway estiver atrás do Cloudflare Access)
+#   MAIL_WEBHOOK_URL, MAIL_WEBHOOK_SECRET, AUDIT_EMAIL_TO
+#   ROUTINE_WEBHOOK_URL  (opcional)

@@ -25,24 +25,31 @@ jobs:
           workingDirectory: worker
           command: deploy
 
+      # Publica no Worker cada segredo que estiver cadastrado no GitHub (os vazios são ignorados).
       - name: Set secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          JWT_SECRET_VALUE: ${{ secrets.JWT_SECRET }}
-          USERS_JSON_VALUE: ${{ secrets.USERS_JSON }}
-          ROUTINE_WEBHOOK_URL_VALUE: ${{ secrets.ROUTINE_WEBHOOK_URL }}
-          ALICE_API_KEY_VALUE: ${{ secrets.ALICE_API_KEY }}
+          S_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          S_USERS_JSON: ${{ secrets.USERS_JSON }}
+          S_ALICE_API_KEY: ${{ secrets.ALICE_API_KEY }}
+          S_ROUTINE_WEBHOOK_URL: ${{ secrets.ROUTINE_WEBHOOK_URL }}
+          S_OPENCLAW_BASE_URL: ${{ secrets.OPENCLAW_BASE_URL }}
+          S_OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+          S_OPENCLAW_HOOKS_TOKEN: ${{ secrets.OPENCLAW_HOOKS_TOKEN }}
+          S_CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          S_CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          S_MAIL_WEBHOOK_URL: ${{ secrets.MAIL_WEBHOOK_URL }}
+          S_MAIL_WEBHOOK_SECRET: ${{ secrets.MAIL_WEBHOOK_SECRET }}
+          S_AUDIT_EMAIL_TO: ${{ secrets.AUDIT_EMAIL_TO }}
         run: |
-          if [ -n "$JWT_SECRET_VALUE" ]; then
-            printf '%s' "$JWT_SECRET_VALUE" | npx wrangler secret put JWT_SECRET
-          fi
-          if [ -n "$USERS_JSON_VALUE" ]; then
-            printf '%s' "$USERS_JSON_VALUE" | npx wrangler secret put USERS_JSON
-          fi
-          if [ -n "$ROUTINE_WEBHOOK_URL_VALUE" ]; then
-            printf '%s' "$ROUTINE_WEBHOOK_URL_VALUE" | npx wrangler secret put ROUTINE_WEBHOOK_URL
-          fi
-          if [ -n "$ALICE_API_KEY_VALUE" ]; then
-            printf '%s' "$ALICE_API_KEY_VALUE" | npx wrangler secret put ALICE_API_KEY
-          fi
+          for name in JWT_SECRET USERS_JSON ALICE_API_KEY ROUTINE_WEBHOOK_URL \
+                      OPENCLAW_BASE_URL OPENCLAW_GATEWAY_TOKEN OPENCLAW_HOOKS_TOKEN \
+                      CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET \
+                      MAIL_WEBHOOK_URL MAIL_WEBHOOK_SECRET AUDIT_EMAIL_TO; do
+            var="S_$name"
+            value="${!var}"
+            if [ -n "$value" ]; then
+              printf '%s' "$value" | npx wrangler secret put "$name"
+            fi
+          done

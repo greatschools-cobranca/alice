@@ -1,742 +1,612 @@
 /**
  * Torre de Controle — backend (Cloudflare Worker)
  *
- * Endpoints:
- *   POST /api/login            { username, password } -> sets session cookie
- *   POST /api/logout           -> clears session cookie
- *   GET  /api/session          -> { authenticated, username }
- *   GET  /api/routines         -> list of routines with current on/off state
- *   GET  /api/routines/status  -> PUBLIC, no auth. Minimal machine-readable status:
- *                                  [{ id, on }, ...]. Meant for Alice/OpenClaw to poll
- *                                  before running a routine — no names/descriptions/logs.
- *   POST /api/routines/:id/toggle -> flips a routine's state, logs it, calls the
- *                                    bridge webhook if ROUTINE_WEBHOOK_URL is set
+ * Painel (Authorization: Bearer <token do /api/login>):
+ *   POST /api/login                         { username, password } -> { token, username, expiresAt }
+ *   GET  /api/session                       -> { username }
+ *   GET  /api/health                        -> o que está configurado/conectado (OpenClaw, e-mail)
+ *   GET  /api/routines                      -> rotinas com estado e última execução
+ *   POST /api/routines/save                 { id, name, schedule, description, note, prompt, steps, checks, defaultOn }
+ *   POST /api/routines/import               { routines: [...] } (cria ou substitui por id)
+ *   POST /api/routines/:id/state            { on: true|false }
+ *   POST /api/routines/:id/delete
+ *   GET  /api/routines/pending              propostas da Alice aguardando aprovação
+ *   POST /api/routines/pending/:pid/approve | /reject
+ *   GET  /api/audit?limit=&cursor=          linha do tempo (auditoria)
+ *   GET  /api/audit/:id                     evento completo
+ *   POST /api/test-email                    manda um e-mail de teste
+ *   POST /api/files                         corpo = arquivo cru; X-File-Name; até 20 MB -> { id, ... }
+ *   GET  /api/chat                          histórico da conversa do usuário
+ *   POST /api/chat                          { message, files: [ids] } -> stream SSE da resposta da Alice
+ *   POST /api/chat/reset                    começa uma conversa nova
+ *   GET  /api/tasks | GET /api/tasks/:id
+ *   POST /api/tasks                         { title, description, files: [ids], routineId? }
+ *   POST /api/tasks/:id/resend
  *
- *   POST /api/agent/routines       -> Alice proposes a brand-new routine. Requires the
- *                                      X-Agent-Key header (ALICE_API_KEY). Goes into a
- *                                      pending queue — nothing shows up on the Torre or
- *                                      counts toward anything until Renata approves it.
- *   POST /api/agent/routines/:id   -> Alice proposes an edit to a routine SHE created
- *                                      before (not the two built-in ones). Same auth,
- *                                      same pending-approval flow.
- *   GET  /api/routines/pending             -> (Renata, authenticated) list of pending
- *                                              proposals waiting for approval.
- *   POST /api/routines/pending/:id/approve -> (Renata) applies a pending proposal.
- *   POST /api/routines/pending/:id/reject  -> (Renata) discards a pending proposal.
+ * Público:
+ *   GET  /api/routines/status               [{ id, on }] — a Alice consulta antes de rodar
+ *   GET  /api/files/:id?exp=&sig=           download por link assinado
  *
- * Required secrets/vars (set with `wrangler secret put <NAME>`):
- *   JWT_SECRET          - random long string, signs the session cookie
- *   USERS_JSON          - JSON array: [{ "username": "renata", "passwordHash": "..." }, ...]
- *                         Generate a hash with the /gen-hash helper described in README.md.
- *   ROUTINE_WEBHOOK_URL - optional. If set, every toggle POSTs
- *                         { routineId, action: "enable"|"disable", by: username, at: ISO8601 }
- *                         to this URL. This is where OpenClaw (or whatever runs Alice)
- *                         should listen if/when it exposes a webhook trigger.
- *   ALICE_API_KEY       - random long string. Alice/OpenClaw sends it as the
- *                         "X-Agent-Key" header on every /api/agent/* call. Without this
- *                         secret set, the agent endpoints are disabled (401).
+ * Alice (cabeçalho X-Agent-Key = ALICE_API_KEY):
+ *   GET  /api/agent/routines                definições completas + estado
+ *   POST /api/agent/routines                propõe rotina nova (vai para aprovação)
+ *   POST /api/agent/routines/:id            propõe edição de rotina criada por ela
+ *   POST /api/agent/runs                    reporta execução { routineId?, title?, status, summary, details? }
+ *   GET  /api/agent/tasks/:id               detalhes da tarefa (com links dos arquivos)
+ *   POST /api/agent/tasks/:id               atualiza tarefa { status: running|done|error, result?, files? }
+ *   POST /api/agent/files                   envia arquivo de resultado (mesmo formato do /api/files)
  *
- * Required binding:
- *   ROTINAS (KV namespace) - stores routine state, custom routines created via the
- *                             agent endpoints, the pending-approval queue, and a short
- *                             activity log.
+ * Segredos: JWT_SECRET, USERS_JSON, ALICE_API_KEY, OPENCLAW_BASE_URL, OPENCLAW_GATEWAY_TOKEN,
+ *   OPENCLAW_HOOKS_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, MAIL_WEBHOOK_URL,
+ *   MAIL_WEBHOOK_SECRET, AUDIT_EMAIL_TO, ROUTINE_WEBHOOK_URL (opcional). Detalhes em setup/CONFIGURAR.md.
  */
+import { HttpError, json, corsHeaders, withHeaders, readJson, isValidSlug, clip, spNow } from "./lib/util.js";
+import { login, makeSessionToken, requireUser, requireAgent, SESSION_TTL_SECONDS } from "./lib/auth.js";
+import { record, listAudit, getAuditEvent } from "./lib/audit.js";
+import { sendMail, mailConfigured } from "./lib/mail.js";
+import {
+  sanitizeRoutineFields,
+  getRoutineDefs,
+  setRoutineDefs,
+  getState,
+  setState,
+  setLastRun,
+  listRoutines,
+  requireRoutine,
+  nextOrder,
+  getPending,
+  setPending,
+  newProposalId,
+  newTaskId,
+  saveTask,
+  getTask,
+  listTasks,
+} from "./lib/store.js";
+import { storeUpload, serveSignedFile, resolveFiles, fmtSize } from "./lib/files.js";
+import { openChatStream, collectSseText, submitTask, chatConfigured, hooksConfigured, ping } from "./lib/openclaw.js";
+import { scheduled } from "./cron.js";
+import { migrateLegacy } from "./lib/migrate.js";
 
-const COOKIE_NAME = "tc_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12h
+const RUN_STATUSES = ["started", "ok", "error", "skipped", "wait"];
+const CHAT_HISTORY_MAX = 100;
 
-const DEFAULT_ROUTINES = [
-  {
-    id: "agenda-cobranca",
-    name: "Atualizar cronograma de disparos da régua automática de cobrança",
-    note: "Realizado diretamente na Planilha Online de Cronograma.",
-    schedule: "todos os dias · 08:00 (America/Sao_Paulo)",
-    description:
-      "Essa rotina atualiza a base de disparos automáticos da integração TOTVS x WorkChat para o período informado na aba Disparos TOTVS. A finalidade é calcular, por unidade/escola, quantos disparos de cada régua de cobrança serão realizados na semana.",
-    steps: [
-      {
-        title: "Verificar o arquivo de origem no Drive",
-        items: [
-          "Acessar a pasta BOLETOS POR DIA DE VENCIMENTO.",
-          "Confirmar que o arquivo do dia existe na pasta.",
-          "Validar a estrutura mínima: Grupo, Unidade, DATA VENCIMENTO, QT. BOLETOS e QT. BOLETOS INA.",
-        ],
-      },
-      {
-        title: "Atualizar o período de disparo",
-        items: [
-          "Abrir a planilha Cronograma Cobrança - 2026.",
-          "Ir na aba Disparos TOTVS.",
-          "Ajustar o período de disparo com segunda e sexta-feira da semana atual.",
-        ],
-      },
-      {
-        title: "Limpar os resultados antigos",
-        items: [
-          "Limpar os resultados da tabela da aba Disparos TOTVS.",
-          "Limpar os resultados da aba Tabela vencimentos.",
-        ],
-      },
-      {
-        title: "Atualizar a Tabela vencimentos",
-        items: [
-          "Usar o arquivo BOLETOS POR DIA DE VENCIMENTO como origem.",
-          "Atualizar os vencimentos do mês anterior e do mês atual com QT. BOLETOS INA maior que zero.",
-          "Atualizar também os vencimentos do mês atual, a partir do dia de hoje, com QT. BOLETOS maior que zero.",
-          "Manter uma linha por unidade/escola.",
-          "Atualizar a observação com data e \"Atualizado por: Alice Fontes\".",
-        ],
-      },
-      {
-        title: "Apresentar os resultados na Disparos TOTVS",
-        items: [
-          "Usar a Tabela consulta-Não editar para identificar as datas de disparo por régua.",
-          "Apresentar uma linha para cada unidade/escola.",
-          "Não agrupar unidades na mesma linha.",
-          "Considerar apenas disparos dentro do período configurado.",
-        ],
-      },
-      {
-        title: "Conferência final",
-        items: [
-          "Validar o período configurado.",
-          "Validar que a aba Disparos TOTVS não tem registros antigos de resultado.",
-          "Somar o total de disparos e conferir se o volume faz sentido.",
-        ],
-      },
-    ],
-    defaultOn: true,
-  },
-  {
-    id: "analise-base-cobranca",
-    name: "Suporte na preparação da base de cobrança manual",
-    note: "Sob demanda / Solicitação recebida por email.",
-    schedule: "dias úteis · janelas entre 10:30 e 13:00 (America/Sao_Paulo)",
-    description:
-      "Procura o e-mail 'Base Cobrança - Análise diária' na caixa gmail-alice, classifica a base por CPF (Rematriculável / Mensagem automática) e responde com a planilha processada.",
-    prompt:
-      "Alice, realize a análise diária completa da base de cobrança com os arquivos enviados.\n\n" +
-      "Arquivos enviados hoje:\n" +
-      "1. Base TOTVS: histórico de lançamentos financeiros desde 2021 até a data atual;\n" +
-      "2. INA-BI Interno: base de inadimplência do ano vigente/base de cobrança trabalhada;\n" +
-      "3. PÓS-ENVIO: base dos CPFs que receberam mensagens automáticas de cobrança hoje.\n\n" +
-      "Use a classificação de tipo de serviço que você já tem salva como referência. Não estou reenviando essa planilha.\n\n" +
-      "Objetivo:\n" +
-      "• Classificar o perfil de inadimplência por CPF do responsável financeiro;\n" +
-      "• Atualizar a base INA-BI Interno com Rematriculável, PERFIL CPF e Mensagem automática hoje;\n" +
-      "• Gerar nova planilha sem sobrescrever os arquivos originais;\n" +
-      "• Informar premissas, totais e divergências encontradas.\n\n" +
-      "Escopo da classificação:\n" +
-      "• Considerar somente lançamentos vencidos e em aberto;\n" +
-      "• Considerar vencidos até a data de hoje;\n" +
-      "• Considerar todos os anos de vencimento;\n" +
-      "• Não considerar classificação histórica;\n" +
-      "• Desconsiderar antes da classificação qualquer lançamento cuja coluna HISTORICO contenha TESTE;\n" +
-      "• Classificar no nível do CPF, consolidando todos os lançamentos válidos do mesmo responsável financeiro.\n\n" +
-      "Regras principais:\n" +
-      "1. PROTESTADO = S ou E → Crítico - protesto;\n" +
-      "2. Acordo em aberto → Crítico;\n" +
-      "3. Curso regular com até 2 parcelas vencidas → Pontual;\n" +
-      "4. Curso regular com 3 ou mais parcelas vencidas → Recorrente;\n" +
-      "5. Apenas material didático → Estratégico MD;\n" +
-      "6. Apenas complementos → Estratégico;\n" +
-      "7. Complementos + material didático → Estratégico + MD;\n" +
-      "8. Apenas taxas, saídas e eventos → Estratégico taxas.\n\n" +
-      "Regras complementares:\n" +
-      "• NF REVENDA - A RECEBER com SERVICO vazio = Material Didático;\n" +
-      "• Complementos + Taxas/Eventos/Saídas = Estratégico;\n" +
-      "• Material Didático + Taxas/Eventos/Saídas = Estratégico MD;\n" +
-      "• Material Didático + Complementos + Taxas/Eventos/Saídas = Estratégico + MD.\n\n" +
-      "Critério de rematriculável:\n" +
-      "• CPF com pelo menos um aluno em DESCRICAO = 5 - CURSANDO;\n" +
-      "• Excluir M3 de todas as escolas;\n" +
-      "• Excluir F9 somente do CJA.\n\n" +
-      "Mensagem automática:\n" +
-      "• Cruzar o PÓS-ENVIO com a base INA-BI Interno por CPF;\n" +
-      "• Marcar Mensagem automática hoje = Sim, Não ou Sem CPF.\n\n" +
-      "Entrega esperada:\n" +
-      "• Planilha final atualizada;\n" +
-      "• Aba/resumo de perfil por CPF;\n" +
-      "• Aba com CPF, perfil e valor total de inadimplência;\n" +
-      "• Premissas e divergências;\n" +
-      "• Resumo com total de linhas, linhas desconsideradas por TESTE, CPFs únicos, CPFs por perfil, valor por perfil, rematriculáveis e mensagens automáticas do dia.",
-    defaultOn: true,
-  },
-  {
-    id: "emails-ina-ciclo-2027",
-    name: "E-mails INA Ciclo 2027",
-    note: "Fonte: e-mails de [e-mail removido] na label Rematrícula 2027 (não usa a caixa de entrada).",
-    schedule: "terças e quintas · janela principal 16h e 16h30, checagem complementar às 17h (America/Sao_Paulo)",
-    description:
-      "Busca, na label 'Rematrícula 2027' (sem subpastas regionais), e-mails de [e-mail removido] " +
-      "com assunto contendo 'INA CICLO 2027' e data do dia da execução. Separa por regional pelo conteúdo/assunto " +
-      "e pelos nomes das imagens das unidades, valida se todas as unidades esperadas de cada regional chegaram, " +
-      "baixa e confere as imagens (sem duplicidade por hash) e envia um e-mail por regional com os indicadores de " +
-      "inadimplência da rematrícula, anexando apenas as imagens daquela regional.",
-    steps: [
-      {
-        title: "Unidades esperadas por regional",
-        items: [
-          "Regional Horizonte: CCPA, Objetivo Praia Grande e Objetivo São Vicente.",
-          "Regional Conexão: Marupiara, Objetivo Aquarius e Anchieta/CJA.",
-          "Regional Santos: Objetivo Guarujá, Objetivo Embaré, Objetivo Conselheiro e Objetivo Ponta da Praia.",
-          "Santo Anjo: Santo Anjo.",
-        ],
-      },
-      {
-        title: "Validações antes de enviar",
-        items: [
-          "Conferir se todos os e-mails/imagens da regional chegaram no dia.",
-          "Baixar os anexos/imagens de cada unidade.",
-          "Conferir se há uma imagem correspondente para cada unidade esperada.",
-          "Verificar se as imagens não estão duplicadas pelo hash.",
-          "Verificar se a regional já foi enviada no dia, para evitar duplicidade.",
-        ],
-      },
-      {
-        title: "Tratamento de exceções",
-        items: [
-          "Faltando e-mail, imagem ou unidade da regional: registrar WAIT e não enviar aquela regional.",
-          "Regional já enviada no dia: registrar SKIP e não reenviar.",
-          "Erro real no envio: registrar erro no log e disparar alerta.",
-        ],
-      },
-      {
-        title: "Envio — destinatários e cópias",
-        items: [
-          "Regional Horizonte → [e-mail removido]",
-          "Regional Conexão → [e-mail removido]",
-          "Regional Santos → [e-mail removido]",
-          "Santo Anjo → [e-mail removido]",
-          "Cc geral (todas as regionais): [e-mail removido] e [e-mail removido].",
-          "Cc adicional só para Regional Conexão: [e-mail removido].",
-        ],
-      },
-      {
-        title: "Assunto e anexos",
-        items: [
-          "Assunto: 'INA CICLO 2027 - <Nome da Regional> - DD/MM/AAAA'.",
-          "Cada regional recebe só o conjunto de imagens da própria regional.",
-        ],
-      },
-      {
-        title: "Registros e rastreabilidade",
-        items: [
-          "Gerar arquivo de trabalho por data.",
-          "Salvar marcador .sent por regional enviada no dia.",
-          "Registrar destinatário, Cc, assunto, IDs dos e-mails de origem e quantidade de anexos.",
-          "Manter log da rotina em state/rematricula_2027.log.",
-        ],
-      },
-      {
-        title: "O que a rotina não faz",
-        items: [
-          "Não recalcula indicadores.",
-          "Não altera os dados das imagens.",
-          "Não envia para responsáveis financeiros, alunos ou famílias.",
-          "Não usa a caixa de entrada como fonte principal.",
-          "Não reenvia regional já marcada como enviada no mesmo dia.",
-        ],
-      },
-    ],
-    prompt:
-      "Prezados, boa tarde!\n\n" +
-      "Segue a atualização dos principais indicadores de inadimplência relacionados à rematrícula da unidade, " +
-      "considerando a base de alunos elegíveis à rematrícula para o período letivo de 2027.\n\n" +
-      "Indicadores acompanhados:\n" +
-      "➡️ Qt. de alunos na base rematriculável hoje: total de alunos cursando em 2026 que ainda não concluíram a " +
-      "rematrícula, exceto alunos do M3 (F9 para CJA).\n" +
-      "➡️ Qt. de responsáveis financeiros inadimplentes: total de responsáveis financeiros inadimplentes dentro " +
-      "da base rematriculável.\n" +
-      "➡️ Qt. de alunos com portal bloqueado: alunos vinculados a responsáveis financeiros com inadimplência " +
-      "superior a R$ 650,00, ficando impossibilitados de realizar a rematrícula.\n" +
-      "➡️ Qt. de alunos com portal liberado: alunos vinculados a responsáveis financeiros com inadimplência " +
-      "inferior a R$ 650,00, permanecendo aptos a realizar a rematrícula.\n" +
-      "➡️ Qt. de alunos adimplentes: alunos vinculados a responsáveis financeiros sem inadimplência e aptos a " +
-      "realizar a rematrícula.\n" +
-      "➡️ Qt. de alunos rematriculados: alunos da base rematriculável com status \"Matrícula Solicitada\" no " +
-      "período letivo de 2027. Para este indicador, é considerado apenas o processo realizado pelo portal, sem " +
-      "validação da baixa da 1ª parcela.\n\n" +
-      "Esses indicadores serão atualizados às 3ªs e 5ªs feiras para acompanhamento da evolução da inadimplência " +
-      "e de seus impactos no processo de rematrícula.\n\n" +
-      "Atenciosamente,\n\n" +
-      "Alice Fontes\n" +
-      "Área de Sucesso das Escolas | Cobrança",
-    defaultOn: true,
-  },
-];
+// ------------------------------------------------------------------ helpers
 
-function jsonResponse(data, init = {}) {
-  return new Response(JSON.stringify(data), {
-    ...init,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...(init.headers || {}),
-    },
-  });
+function apiBase(request, env) {
+  return (env.API_BASE_URL || new URL(request.url).origin).replace(/\/+$/, "");
 }
 
-function corsHeaders(origin) {
-  return {
-    "Access-Control-Allow-Origin": origin || "*",
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Agent-Key",
-  };
-}
-
-// ---- tiny helpers: hashing + HMAC session token (no external deps) ----
-
-async function sha256Hex(input) {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function hashPassword(password, salt) {
-  return sha256Hex(`${salt}:${password}`);
-}
-
-async function hmac(secret, message) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
+function filesBlock(files) {
+  if (!files.length) return "";
+  return (
+    "\n\nArquivos anexados (links válidos por 72h — baixe com: curl -L -o \"<nome>\" \"<link>\"):\n" +
+    files.map((f) => `- ${f.name} (${fmtSize(f.size)}): ${f.url}`).join("\n")
   );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
 }
 
-async function makeSessionToken(secret, username) {
-  const payload = JSON.stringify({ u: username, exp: Date.now() + SESSION_TTL_SECONDS * 1000 });
-  const b64 = btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const sig = await hmac(secret, b64);
-  return `${b64}.${sig}`;
+function stripUrls(files) {
+  return files.map(({ url, ...rest }) => rest);
 }
 
-async function verifySessionToken(secret, token) {
-  if (!token) return null;
-  const [b64, sig] = token.split(".");
-  if (!b64 || !sig) return null;
-  const expected = await hmac(secret, b64);
-  if (expected !== sig) return null;
-  try {
-    const payload = JSON.parse(atob(b64.replace(/-/g, "+").replace(/_/g, "/")));
-    if (payload.exp < Date.now()) return null;
-    return payload.u;
-  } catch {
-    return null;
+async function withFreshUrls(env, base, files) {
+  return resolveFiles(env, base, (files || []).map((f) => f.id)).catch(() =>
+    (files || []).map((f) => ({ ...f, url: null, expired: true }))
+  );
+}
+
+function taskMessage(task, files, base) {
+  return (
+    `[Torre de Controle] Nova tarefa solicitada por ${task.createdBy}.\n` +
+    `ID da tarefa: ${task.id}\n` +
+    (task.routineName ? `Rotina relacionada: ${task.routineName} (${task.routineId})\n` : "") +
+    `\nTítulo: ${task.title}\n\nO que fazer:\n${task.description}` +
+    filesBlock(files) +
+    `\n\nSiga a skill "torre-de-controle":\n` +
+    `1. Ao começar: POST ${base}/api/agent/tasks/${task.id} com {"status":"running"}.\n` +
+    `2. Ao terminar: POST ${base}/api/agent/tasks/${task.id} com {"status":"done","result":"<resumo em markdown>","files":["<ids enviados em /api/agent/files>"]}.\n` +
+    `3. Se não conseguir: {"status":"error","result":"<o que deu errado e o que falta>"}.\n` +
+    `Use o cabeçalho X-Agent-Key.`
+  );
+}
+
+// ------------------------------------------------------------------ rotas do painel
+
+async function routeUser(request, env, ctx, url, path, method) {
+  const user = await requireUser(request, env);
+  const base = apiBase(request, env);
+  let m;
+
+  if (path === "/api/session" && method === "GET") return json({ username: user });
+
+  if (path === "/api/health" && method === "GET") {
+    const conn = await ping(env);
+    return json({
+      chat: { configured: chatConfigured(env), online: conn.ok, reason: conn.reason || null },
+      tasks: { configured: hooksConfigured(env) },
+      mail: { configured: mailConfigured(env) },
+      agentKey: { configured: !!env.ALICE_API_KEY },
+      routineWebhook: { configured: !!env.ROUTINE_WEBHOOK_URL },
+    });
   }
+
+  // ----- rotinas
+  if (path === "/api/routines" && method === "GET") {
+    await migrateLegacy(env);
+    return json({ routines: await listRoutines(env) });
+  }
+
+  if (path === "/api/routines/save" && method === "POST") {
+    const body = await readJson(request);
+    if (!isValidSlug(body.id)) throw new HttpError(400, "id inválido — use letras minúsculas, números e hífen (ex: revisar-boletos)");
+    const fields = sanitizeRoutineFields(body);
+    const defs = await getRoutineDefs(env);
+    const existing = defs[body.id];
+    const now = new Date().toISOString();
+    defs[body.id] = existing
+      ? { ...existing, ...fields, id: body.id, updatedBy: user, updatedAt: now }
+      : { ...fields, id: body.id, order: nextOrder(defs), createdBy: user, createdAt: now };
+    await setRoutineDefs(env, defs);
+    await record(env, ctx, {
+      type: existing ? "routine_edit" : "routine_create",
+      actor: user,
+      routineId: body.id,
+      routineName: fields.name,
+      summary: `${existing ? "Editou" : "Criou"} a rotina "${fields.name}"`,
+    });
+    return json({ ok: true, routine: defs[body.id] });
+  }
+
+  if (path === "/api/routines/import" && method === "POST") {
+    const body = await readJson(request);
+    await migrateLegacy(env);
+    const list = Array.isArray(body) ? body : body.routines;
+    if (!Array.isArray(list) || !list.length || list.length > 100) throw new HttpError(400, "envie { routines: [...] } com até 100 rotinas");
+    const defs = await getRoutineDefs(env);
+    const now = new Date().toISOString();
+    const ids = [];
+    for (const r of list) {
+      if (!isValidSlug(r.id)) throw new HttpError(400, `id inválido: ${r.id}`);
+      const fields = sanitizeRoutineFields(r);
+      defs[r.id] = {
+        ...(defs[r.id] || { order: nextOrder(defs), createdAt: now }),
+        ...fields,
+        id: r.id,
+        createdBy: defs[r.id]?.createdBy || (r.createdBy === "alice" ? "alice" : user),
+        updatedBy: user,
+        updatedAt: now,
+      };
+      ids.push(r.id);
+    }
+    await setRoutineDefs(env, defs);
+    await record(env, ctx, { type: "routine_import", actor: user, summary: `Importou ${ids.length} rotina(s): ${clip(ids.join(", "), 300)}` });
+    return json({ ok: true, imported: ids });
+  }
+
+  if ((m = path.match(/^\/api\/routines\/([a-z0-9-]+)\/state$/)) && method === "POST") {
+    const body = await readJson(request);
+    if (typeof body.on !== "boolean") throw new HttpError(400, "envie { on: true } ou { on: false }");
+    const { routine } = await requireRoutine(env, m[1]);
+    const before = await getState(env, routine.id, routine.defaultOn);
+    await setState(env, routine.id, body.on);
+
+    let bridged = false;
+    let bridgeError = null;
+    if (env.ROUTINE_WEBHOOK_URL) {
+      try {
+        const res = await fetch(env.ROUTINE_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ routineId: routine.id, routineName: routine.name, action: body.on ? "enable" : "disable", by: user, at: new Date().toISOString() }),
+        });
+        bridged = res.ok;
+        if (!res.ok) bridgeError = `HTTP ${res.status}`;
+      } catch (err) {
+        bridgeError = String(err);
+      }
+    }
+    await record(
+      env,
+      ctx,
+      {
+        type: body.on ? "routine_enable" : "routine_disable",
+        severity: bridgeError ? "warn" : "info",
+        actor: user,
+        routineId: routine.id,
+        routineName: routine.name,
+        summary:
+          `${body.on ? "Ligou" : "Desligou"} a rotina "${routine.name}"` +
+          (before === body.on ? " (já estava assim)" : "") +
+          (bridgeError ? ` — falha ao avisar o webhook: ${bridgeError}` : ""),
+      },
+      { alert: !!bridgeError }
+    );
+    return json({ ok: true, id: routine.id, on: body.on, bridged, bridgeError });
+  }
+
+  if ((m = path.match(/^\/api\/routines\/([a-z0-9-]+)\/delete$/)) && method === "POST") {
+    const { defs, routine } = await requireRoutine(env, m[1]);
+    delete defs[routine.id];
+    await setRoutineDefs(env, defs);
+    await env.ROTINAS.delete(`state:${routine.id}`);
+    await record(env, ctx, { type: "routine_delete", severity: "warn", actor: user, routineId: routine.id, routineName: routine.name, summary: `Excluiu a rotina "${routine.name}"` });
+    return json({ ok: true });
+  }
+
+  // ----- propostas da Alice
+  if (path === "/api/routines/pending" && method === "GET") {
+    const pending = await getPending(env);
+    const defs = await getRoutineDefs(env);
+    return json({ pending: pending.map((p) => ({ ...p, current: p.type === "edit" ? defs[p.routineId] || null : null })) });
+  }
+
+  if ((m = path.match(/^\/api\/routines\/pending\/([\w-]+)\/(approve|reject)$/)) && method === "POST") {
+    const [, proposalId, action] = m;
+    const pending = await getPending(env);
+    const idx = pending.findIndex((p) => p.proposalId === proposalId);
+    if (idx === -1) throw new HttpError(404, "proposta não encontrada");
+    const proposal = pending[idx];
+    const defs = await getRoutineDefs(env);
+    const now = new Date().toISOString();
+    let name = proposal.payload?.name || defs[proposal.routineId]?.name || proposal.routineId;
+
+    if (action === "approve") {
+      if (proposal.type === "create") {
+        if (defs[proposal.routineId]) throw new HttpError(409, "já existe uma rotina com esse id — rejeite esta proposta");
+        defs[proposal.routineId] = { ...proposal.payload, order: nextOrder(defs), createdBy: "alice", createdAt: proposal.proposedAt, approvedBy: user, approvedAt: now };
+      } else {
+        const existing = defs[proposal.routineId];
+        if (!existing) throw new HttpError(404, "a rotina original não existe mais — rejeite esta proposta");
+        defs[proposal.routineId] = { ...existing, ...proposal.payload, updatedBy: user, updatedAt: now };
+        name = defs[proposal.routineId].name;
+      }
+      await setRoutineDefs(env, defs);
+    }
+    pending.splice(idx, 1);
+    await setPending(env, pending);
+    await record(env, ctx, {
+      type: `${action}_${proposal.type}`,
+      actor: user,
+      routineId: proposal.routineId,
+      routineName: name,
+      summary: `${action === "approve" ? "Aprovou" : "Rejeitou"} ${proposal.type === "create" ? "a rotina nova" : "a edição da rotina"} "${name}" proposta pela Alice`,
+    });
+    return json({ ok: true });
+  }
+
+  // ----- auditoria
+  if (path === "/api/audit" && method === "GET") {
+    const limit = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
+    return json(await listAudit(env, { limit, cursor: url.searchParams.get("cursor") || undefined }));
+  }
+  if ((m = path.match(/^\/api\/audit\/([\w:-]+)$/)) && method === "GET") {
+    const ev = await getAuditEvent(env, m[1]);
+    if (!ev) throw new HttpError(404, "evento não encontrado");
+    return json(ev);
+  }
+
+  if (path === "/api/test-email" && method === "POST") {
+    if (!mailConfigured(env)) throw new HttpError(503, "e-mail ainda não configurado (MAIL_WEBHOOK_URL, MAIL_WEBHOOK_SECRET, AUDIT_EMAIL_TO)");
+    const res = await sendMail(env, "[Torre] E-mail de teste", `<p>Teste enviado por ${user} pela Torre de Controle. Se chegou, os alertas e o resumo diário vão chegar também.</p>`);
+    if (!res.ok) throw new HttpError(502, `falha no envio: ${res.error}`);
+    return json({ ok: true });
+  }
+
+  // ----- arquivos
+  if (path === "/api/files" && method === "POST") {
+    const info = await storeUpload(request, env, user);
+    return json({ ok: true, file: info }, 201);
+  }
+
+  // ----- conversa
+  if (path === "/api/chat" && method === "GET") {
+    return json({ messages: (await env.ROTINAS.get(`chat:${user}`, "json")) || [] });
+  }
+
+  if (path === "/api/chat/reset" && method === "POST") {
+    const n = Number((await env.ROTINAS.get(`chatsession:${user}`)) || 0) + 1;
+    await env.ROTINAS.put(`chatsession:${user}`, String(n));
+    await env.ROTINAS.put(`chat:${user}`, "[]");
+    await record(env, ctx, { type: "chat_reset", actor: user, summary: "Começou uma conversa nova com a Alice" });
+    return json({ ok: true });
+  }
+
+  if (path === "/api/chat" && method === "POST") {
+    const body = await readJson(request);
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message) throw new HttpError(400, "escreva uma mensagem");
+    if (message.length > 8000) throw new HttpError(400, "mensagem longa demais (máx. 8000 caracteres)");
+    const files = await resolveFiles(env, base, body.files);
+    const n = Number((await env.ROTINAS.get(`chatsession:${user}`)) || 0);
+    const sessionKey = `torre-${user}-${n}`;
+    const content = `[Mensagem de ${user} pela Torre de Controle]\n\n${message}${filesBlock(files)}`;
+
+    const upstream = await openChatStream(env, sessionKey, content);
+
+    const history = (await env.ROTINAS.get(`chat:${user}`, "json")) || [];
+    history.push({ role: "user", text: message, files: stripUrls(files), at: new Date().toISOString() });
+
+    const [toClient, toStore] = upstream.body.tee();
+    ctx.waitUntil(
+      (async () => {
+        const { text, error } = await collectSseText(toStore);
+        history.push({ role: "assistant", text: text || "", error: error || undefined, at: new Date().toISOString() });
+        await env.ROTINAS.put(`chat:${user}`, JSON.stringify(history.slice(-CHAT_HISTORY_MAX)));
+        if (files.length || error) {
+          await record(env, null, {
+            type: "chat_message",
+            severity: error ? "warn" : "info",
+            actor: user,
+            summary: error ? `Erro na conversa com a Alice: ${clip(error, 200)}` : `Enviou ${files.length} arquivo(s) para a Alice pela conversa`,
+          });
+        }
+      })()
+    );
+    return new Response(toClient, {
+      headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache" },
+    });
+  }
+
+  // ----- tarefas
+  if (path === "/api/tasks" && method === "GET") return json({ tasks: await listTasks(env, 50) });
+
+  if ((m = path.match(/^\/api\/tasks\/([\w-]+)$/)) && method === "GET") {
+    const task = await getTask(env, m[1]);
+    if (!task) throw new HttpError(404, "tarefa não encontrada");
+    return json({
+      ...task,
+      files: await withFreshUrls(env, base, task.files),
+      resultFiles: await withFreshUrls(env, base, task.resultFiles),
+    });
+  }
+
+  if (path === "/api/tasks" && method === "POST") {
+    const body = await readJson(request);
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    if (!title || title.length > 150) throw new HttpError(400, "dê um título de até 150 caracteres");
+    if (!description || description.length > 10000) throw new HttpError(400, "descreva a atividade (até 10.000 caracteres)");
+    const files = await resolveFiles(env, base, body.files);
+    let routine = null;
+    if (body.routineId) routine = (await requireRoutine(env, body.routineId)).routine;
+
+    const now = new Date().toISOString();
+    const task = {
+      id: newTaskId(),
+      title,
+      description,
+      routineId: routine?.id,
+      routineName: routine?.name,
+      files: stripUrls(files),
+      status: "queued",
+      createdBy: user,
+      createdAt: now,
+      updatedAt: now,
+      history: [{ at: now, status: "queued", by: user }],
+    };
+    return json(await dispatchTask(env, ctx, task, files, base, user), 201);
+  }
+
+  if ((m = path.match(/^\/api\/tasks\/([\w-]+)\/resend$/)) && method === "POST") {
+    const task = await getTask(env, m[1]);
+    if (!task) throw new HttpError(404, "tarefa não encontrada");
+    if (["done", "running"].includes(task.status)) throw new HttpError(409, "a tarefa já está em andamento ou concluída");
+    const files = await resolveFiles(env, base, task.files.map((f) => f.id));
+    return json(await dispatchTask(env, ctx, task, files, base, user));
+  }
+
+  throw new HttpError(404, "rota não encontrada");
 }
 
-function getCookie(request, name) {
-  const header = request.headers.get("Cookie") || "";
-  const match = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[1]) : null;
+async function dispatchTask(env, ctx, task, files, base, user) {
+  let sendError = null;
+  task.attempts = (task.attempts || 0) + 1;
+  try {
+    const { runId } = await submitTask(env, task, taskMessage(task, files, base));
+    task.runId = runId;
+    task.status = "sent";
+  } catch (err) {
+    sendError = err.message || String(err);
+    task.status = "send_failed";
+    task.error = sendError;
+  }
+  task.updatedAt = new Date().toISOString();
+  task.history.push({ at: task.updatedAt, status: task.status, by: user, note: sendError || undefined });
+  await saveTask(env, task);
+  await record(
+    env,
+    ctx,
+    {
+      type: sendError ? "task_send_failed" : "task_sent",
+      severity: sendError ? "error" : "info",
+      actor: user,
+      taskId: task.id,
+      routineId: task.routineId,
+      routineName: task.routineName,
+      summary: sendError
+        ? `Não consegui enviar a tarefa "${task.title}" para a Alice: ${clip(sendError, 200)}`
+        : `Pediu à Alice: "${task.title}"${task.files.length ? ` (${task.files.length} arquivo(s))` : ""}`,
+    },
+    { alert: !!sendError }
+  );
+  return { ok: !sendError, task: { ...task, files }, error: sendError };
 }
 
-async function requireAuth(request, env) {
-  const token = getCookie(request, COOKIE_NAME);
-  const username = await verifySessionToken(env.JWT_SECRET, token);
-  return username; // null if not authenticated
+// ------------------------------------------------------------------ rotas da Alice
+
+async function routeAgent(request, env, ctx, url, path, method) {
+  const actor = requireAgent(request, env);
+  const base = apiBase(request, env);
+  let m;
+
+  if (path === "/api/agent/routines" && method === "GET") {
+    return json({ routines: await listRoutines(env) });
+  }
+
+  if (path === "/api/agent/routines" && method === "POST") {
+    const body = await readJson(request);
+    if (!isValidSlug(body.id)) throw new HttpError(400, "id inválido — use letras minúsculas, números e hífen (ex: revisar-boletos-atraso)");
+    const fields = sanitizeRoutineFields(body);
+    const defs = await getRoutineDefs(env);
+    if (defs[body.id]) throw new HttpError(409, `já existe uma rotina com esse id — para alterá-la use POST /api/agent/routines/${body.id}`);
+    const pending = await getPending(env);
+    if (pending.some((p) => p.type === "create" && p.routineId === body.id)) throw new HttpError(409, "já existe uma proposta pendente com esse id");
+    const proposal = { proposalId: newProposalId(), type: "create", routineId: body.id, payload: { ...fields, id: body.id }, proposedBy: actor, proposedAt: new Date().toISOString() };
+    pending.unshift(proposal);
+    await setPending(env, pending);
+    await record(env, ctx, { type: "propose_create", actor, routineId: body.id, routineName: fields.name, summary: `Alice propôs a rotina nova "${fields.name}" (aguardando aprovação)` });
+    return json({ ok: true, proposalId: proposal.proposalId, status: "pending_approval" }, 201);
+  }
+
+  if ((m = path.match(/^\/api\/agent\/routines\/([a-z0-9-]+)$/)) && method === "POST") {
+    const defs = await getRoutineDefs(env);
+    const current = defs[m[1]];
+    if (!current || current.createdBy !== "alice") {
+      throw new HttpError(404, "só é possível propor edição de rotinas criadas pela Alice e já aprovadas");
+    }
+    const changes = sanitizeRoutineFields(await readJson(request), { partial: true });
+    if (!Object.keys(changes).length) throw new HttpError(400, "nenhum campo reconhecido foi enviado para alterar");
+    const pending = await getPending(env);
+    const proposal = { proposalId: newProposalId(), type: "edit", routineId: current.id, payload: changes, proposedBy: actor, proposedAt: new Date().toISOString() };
+    pending.unshift(proposal);
+    await setPending(env, pending);
+    await record(env, ctx, { type: "propose_edit", actor, routineId: current.id, routineName: current.name, summary: `Alice propôs alterar a rotina "${current.name}" (aguardando aprovação)` });
+    return json({ ok: true, proposalId: proposal.proposalId, status: "pending_approval" }, 201);
+  }
+
+  if (path === "/api/agent/runs" && method === "POST") {
+    const body = await readJson(request);
+    if (!RUN_STATUSES.includes(body.status)) throw new HttpError(400, `status precisa ser um de: ${RUN_STATUSES.join(", ")}`);
+    const summary = clip(typeof body.summary === "string" ? body.summary : "", 1000);
+    const details = clip(typeof body.details === "string" ? body.details : "", 20000);
+    const at = new Date().toISOString();
+
+    let routine = null;
+    let on = null;
+    if (body.routineId) {
+      routine = (await requireRoutine(env, body.routineId)).routine;
+      on = await getState(env, routine.id, routine.defaultOn);
+    }
+    const label = routine ? routine.name : clip(body.title || "Atividade avulsa", 150);
+
+    if (routine) {
+      await setLastRun(env, routine.id, { status: body.status, summary, at });
+      if (["ok", "skipped", "error"].includes(body.status)) {
+        await env.ROTINAS.put(`runday:${routine.id}:${spNow().date}`, body.status, { expirationTtl: 60 * 60 * 72 });
+      }
+    }
+
+    const ranWhileOff = routine && on === false && ["started", "ok"].includes(body.status);
+    const severity = body.status === "error" ? "error" : ranWhileOff ? "warn" : "info";
+    const statusLabel = { started: "iniciou", ok: "concluiu", error: "falhou", skipped: "pulou", wait: "aguardando" }[body.status];
+    await record(
+      env,
+      ctx,
+      {
+        type: `run_${body.status}`,
+        severity,
+        actor,
+        routineId: routine?.id,
+        routineName: label,
+        summary: `${label}: ${statusLabel}${summary ? ` — ${summary}` : ""}${ranWhileOff ? " (ATENÇÃO: a rotina está DESLIGADA na Torre)" : ""}`,
+        details: details || undefined,
+      },
+      { alert: severity !== "info" }
+    );
+    return json({ ok: true, routineOn: on });
+  }
+
+  if ((m = path.match(/^\/api\/agent\/tasks\/([\w-]+)$/))) {
+    const task = await getTask(env, m[1]);
+    if (!task) throw new HttpError(404, "tarefa não encontrada");
+
+    if (method === "GET") {
+      return json({ ...task, files: await withFreshUrls(env, base, task.files) });
+    }
+    if (method === "POST") {
+      const body = await readJson(request);
+      if (!["running", "done", "error"].includes(body.status)) throw new HttpError(400, "status precisa ser running, done ou error");
+      const result = typeof body.result === "string" ? clip(body.result, 20000) : undefined;
+      const resultFiles = body.files ? stripUrls(await resolveFiles(env, base, body.files)) : undefined;
+      const now = new Date().toISOString();
+      task.status = body.status;
+      task.updatedAt = now;
+      if (result !== undefined) task.result = result;
+      if (resultFiles) task.resultFiles = resultFiles;
+      if (body.status !== "running") task.finishedAt = now;
+      task.history.push({ at: now, status: body.status, by: actor });
+      await saveTask(env, task);
+      if (body.status !== "running") {
+        await record(
+          env,
+          ctx,
+          {
+            type: `task_${body.status}`,
+            severity: body.status === "error" ? "error" : "info",
+            actor,
+            taskId: task.id,
+            routineId: task.routineId,
+            routineName: task.routineName,
+            summary: `Tarefa "${task.title}" ${body.status === "done" ? "concluída" : "falhou"}${result ? ` — ${clip(result.replace(/\s+/g, " "), 200)}` : ""}`,
+            details: result,
+          },
+          { alert: body.status === "error" }
+        );
+      }
+      return json({ ok: true });
+    }
+  }
+
+  if (path === "/api/agent/files" && method === "POST") {
+    const info = await storeUpload(request, env, actor);
+    return json({ ok: true, file: info }, 201);
+  }
+
+  throw new HttpError(404, "rota não encontrada");
 }
 
-function requireAgentAuth(request, env) {
-  if (!env.ALICE_API_KEY) return false;
-  const header = request.headers.get("X-Agent-Key") || "";
-  return header === env.ALICE_API_KEY;
-}
+// ------------------------------------------------------------------ entrada
 
-function isValidSlug(id) {
-  return typeof id === "string" && /^[a-z0-9][a-z0-9-]{1,49}$/.test(id);
-}
+async function handle(request, env, ctx) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const method = request.method;
 
-function newProposalId() {
-  return `prop-${crypto.randomUUID().slice(0, 8)}`;
-}
+  if (path === "/api/login" && method === "POST") {
+    const body = await readJson(request);
+    const username = await login(env, body.username, body.password, (u) =>
+      record(env, ctx, { type: "login_locked", severity: "warn", actor: "torre", summary: `Login de "${clip(u, 40)}" bloqueado por 15 min após 5 senhas erradas` }, { alert: true })
+    );
+    await record(env, ctx, { type: "login", actor: username, summary: `${username} entrou na Torre` });
+    return json({ token: await makeSessionToken(env, username), username, expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
+  }
 
-// ---- KV-backed collections ----
+  if (path === "/api/routines/status" && method === "GET") {
+    await migrateLegacy(env);
+    const routines = await listRoutines(env);
+    return json(routines.map((r) => ({ id: r.id, on: r.on })));
+  }
 
-async function getCustomRoutines(env) {
-  const raw = await env.ROTINAS.get("custom_routines");
-  return raw ? JSON.parse(raw) : {};
-}
+  let m;
+  if ((m = path.match(/^\/api\/files\/(f[0-9a-z]+)$/)) && method === "GET") {
+    return serveSignedFile(env, m[1], url);
+  }
 
-async function setCustomRoutines(env, map) {
-  await env.ROTINAS.put("custom_routines", JSON.stringify(map));
-}
-
-async function getPendingProposals(env) {
-  const raw = await env.ROTINAS.get("pending_proposals");
-  return raw ? JSON.parse(raw) : [];
-}
-
-async function setPendingProposals(env, list) {
-  await env.ROTINAS.put("pending_proposals", JSON.stringify(list));
-}
-
-async function getAllRoutineDefs(env) {
-  const custom = await getCustomRoutines(env);
-  return [...DEFAULT_ROUTINES, ...Object.values(custom)];
-}
-
-async function getRoutineState(env) {
-  const raw = await env.ROTINAS.get("state");
-  const state = raw ? JSON.parse(raw) : {};
-  const all = await getAllRoutineDefs(env);
-  return all.map((r) => ({
-    ...r,
-    on: Object.prototype.hasOwnProperty.call(state, r.id) ? state[r.id] : !!r.defaultOn,
-  }));
-}
-
-async function setRoutineState(env, id, on) {
-  const raw = await env.ROTINAS.get("state");
-  const state = raw ? JSON.parse(raw) : {};
-  state[id] = on;
-  await env.ROTINAS.put("state", JSON.stringify(state));
-}
-
-async function appendLog(env, entry) {
-  const raw = await env.ROTINAS.get("log");
-  const log = raw ? JSON.parse(raw) : [];
-  log.unshift(entry);
-  await env.ROTINAS.put("log", JSON.stringify(log.slice(0, 200)));
+  if (path.startsWith("/api/agent/")) return routeAgent(request, env, ctx, url, path, method);
+  if (path.startsWith("/api/")) return routeUser(request, env, ctx, url, path, method);
+  throw new HttpError(404, "rota não encontrada");
 }
 
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const origin = request.headers.get("Origin");
-    const cors = corsHeaders(origin);
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: cors });
-    }
-
+  async fetch(request, env, ctx) {
+    const cors = corsHeaders(request, env);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     try {
-      // ---- POST /api/login ----
-      if (url.pathname === "/api/login" && request.method === "POST") {
-        const { username, password } = await request.json();
-        const users = JSON.parse(env.USERS_JSON || "[]");
-        const user = users.find((u) => u.username === username);
-        if (!user) return jsonResponse({ error: "Usuário ou senha inválidos." }, { status: 401, headers: cors });
-
-        const [salt] = user.passwordHash.split("$");
-        const computed = await hashPassword(password, salt);
-        const fullComputed = `${salt}$${computed}`;
-        if (fullComputed !== user.passwordHash) {
-          return jsonResponse({ error: "Usuário ou senha inválidos." }, { status: 401, headers: cors });
-        }
-
-        const token = await makeSessionToken(env.JWT_SECRET, username);
-        return jsonResponse(
-          { ok: true, username },
-          {
-            headers: {
-              ...cors,
-              "Set-Cookie": `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${SESSION_TTL_SECONDS}`,
-            },
-          }
-        );
-      }
-
-      // ---- POST /api/logout ----
-      if (url.pathname === "/api/logout" && request.method === "POST") {
-        return jsonResponse(
-          { ok: true },
-          {
-            headers: {
-              ...cors,
-              "Set-Cookie": `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0`,
-            },
-          }
-        );
-      }
-
-      // ---- GET /api/session ----
-      if (url.pathname === "/api/session" && request.method === "GET") {
-        const username = await requireAuth(request, env);
-        return jsonResponse({ authenticated: !!username, username: username || null }, { headers: cors });
-      }
-
-      // ---- GET /api/routines/status (public, no auth, minimal fields) ----
-      if (url.pathname === "/api/routines/status" && request.method === "GET") {
-        const routines = await getRoutineState(env);
-        const status = routines.map((r) => ({ id: r.id, on: r.on }));
-        return jsonResponse(status, { headers: cors });
-      }
-
-      // ---- GET /api/routines ----
-      if (url.pathname === "/api/routines" && request.method === "GET") {
-        const username = await requireAuth(request, env);
-        if (!username) return jsonResponse({ error: "not authenticated" }, { status: 401, headers: cors });
-        const routines = await getRoutineState(env);
-        const rawLog = await env.ROTINAS.get("log");
-        const log = rawLog ? JSON.parse(rawLog) : [];
-        return jsonResponse({ routines, log: log.slice(0, 15) }, { headers: cors });
-      }
-
-      // ---- POST /api/routines/:id/toggle ----
-      const toggleMatch = url.pathname.match(/^\/api\/routines\/([\w-]+)\/toggle$/);
-      if (toggleMatch && request.method === "POST") {
-        const username = await requireAuth(request, env);
-        if (!username) return jsonResponse({ error: "not authenticated" }, { status: 401, headers: cors });
-
-        const id = toggleMatch[1];
-        const all = await getAllRoutineDefs(env);
-        const routine = all.find((r) => r.id === id);
-        if (!routine) return jsonResponse({ error: "rotina não encontrada" }, { status: 404, headers: cors });
-
-        const current = await getRoutineState(env);
-        const currentlyOn = current.find((r) => r.id === id).on;
-        const nextOn = !currentlyOn;
-        await setRoutineState(env, id, nextOn);
-
-        const logEntry = {
-          routineId: id,
-          routineName: routine.name,
-          action: nextOn ? "enable" : "disable",
-          by: username,
-          at: new Date().toISOString(),
-          bridged: false,
-        };
-
-        // If a bridge webhook is configured (e.g. an OpenClaw HTTP trigger),
-        // forward the toggle so it can actually pause/resume Alice's routine.
-        if (env.ROUTINE_WEBHOOK_URL) {
-          try {
-            await fetch(env.ROUTINE_WEBHOOK_URL, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                routineId: id,
-                routineName: routine.name,
-                action: nextOn ? "enable" : "disable",
-                by: username,
-                at: logEntry.at,
-              }),
-            });
-            logEntry.bridged = true;
-          } catch (err) {
-            logEntry.bridgeError = String(err);
-          }
-        }
-
-        await appendLog(env, logEntry);
-        return jsonResponse({ ok: true, id, on: nextOn, bridged: logEntry.bridged }, { headers: cors });
-      }
-
-      // ---- POST /api/agent/routines (Alice proposes a NEW routine) ----
-      if (url.pathname === "/api/agent/routines" && request.method === "POST") {
-        if (!requireAgentAuth(request, env)) {
-          return jsonResponse({ error: "chave de agente inválida ou ausente" }, { status: 401, headers: cors });
-        }
-        const body = await request.json().catch(() => null);
-        if (!body) return jsonResponse({ error: "corpo JSON inválido" }, { status: 400, headers: cors });
-        const { id, name, schedule, description, note, steps, defaultOn } = body;
-
-        if (!isValidSlug(id)) {
-          return jsonResponse(
-            { error: "id inválido — use letras minúsculas, números e hífen (ex: revisar-boletos-atraso)" },
-            { status: 400, headers: cors }
-          );
-        }
-        if (!name || !schedule || !description) {
-          return jsonResponse({ error: "faltam campos obrigatórios: name, schedule, description" }, { status: 400, headers: cors });
-        }
-        if (steps !== undefined && !Array.isArray(steps)) {
-          return jsonResponse({ error: "steps, se enviado, precisa ser uma lista de { title, items[] }" }, { status: 400, headers: cors });
-        }
-
-        const all = await getAllRoutineDefs(env);
-        if (all.some((r) => r.id === id)) {
-          return jsonResponse(
-            { error: "já existe uma rotina com esse id — para alterá-la use POST /api/agent/routines/" + id },
-            { status: 409, headers: cors }
-          );
-        }
-        const pending = await getPendingProposals(env);
-        if (pending.some((p) => p.type === "create" && p.routineId === id)) {
-          return jsonResponse({ error: "já existe uma proposta pendente com esse id" }, { status: 409, headers: cors });
-        }
-
-        const proposal = {
-          proposalId: newProposalId(),
-          type: "create",
-          routineId: id,
-          payload: {
-            id,
-            name,
-            schedule,
-            description,
-            note: note || "",
-            ...(Array.isArray(steps) ? { steps } : {}),
-            defaultOn: !!defaultOn,
-          },
-          proposedBy: "alice",
-          proposedAt: new Date().toISOString(),
-        };
-        pending.unshift(proposal);
-        await setPendingProposals(env, pending);
-        await appendLog(env, {
-          routineId: id,
-          routineName: name,
-          action: "propose_create",
-          by: "alice",
-          at: proposal.proposedAt,
-        });
-        return jsonResponse({ ok: true, proposalId: proposal.proposalId, status: "pending_approval" }, { status: 201, headers: cors });
-      }
-
-      // ---- POST /api/agent/routines/:id (Alice proposes an EDIT to a routine she created) ----
-      const agentEditMatch = url.pathname.match(/^\/api\/agent\/routines\/([\w-]+)$/);
-      if (agentEditMatch && request.method === "POST") {
-        if (!requireAgentAuth(request, env)) {
-          return jsonResponse({ error: "chave de agente inválida ou ausente" }, { status: 401, headers: cors });
-        }
-        const routineId = agentEditMatch[1];
-        const custom = await getCustomRoutines(env);
-        const current = custom[routineId];
-        if (!current) {
-          return jsonResponse(
-            { error: "só é possível editar rotinas criadas pela Alice e já aprovadas por Renata" },
-            { status: 404, headers: cors }
-          );
-        }
-
-        const body = await request.json().catch(() => null);
-        if (!body) return jsonResponse({ error: "corpo JSON inválido" }, { status: 400, headers: cors });
-
-        const allowedFields = ["name", "schedule", "description", "note", "steps", "defaultOn"];
-        const changes = {};
-        for (const key of allowedFields) {
-          if (Object.prototype.hasOwnProperty.call(body, key)) changes[key] = body[key];
-        }
-        if (changes.steps !== undefined && !Array.isArray(changes.steps)) {
-          return jsonResponse({ error: "steps, se enviado, precisa ser uma lista de { title, items[] }" }, { status: 400, headers: cors });
-        }
-        if (Object.keys(changes).length === 0) {
-          return jsonResponse({ error: "nenhum campo reconhecido foi enviado para alterar" }, { status: 400, headers: cors });
-        }
-
-        const pending = await getPendingProposals(env);
-        const proposal = {
-          proposalId: newProposalId(),
-          type: "edit",
-          routineId,
-          payload: changes,
-          proposedBy: "alice",
-          proposedAt: new Date().toISOString(),
-        };
-        pending.unshift(proposal);
-        await setPendingProposals(env, pending);
-        await appendLog(env, {
-          routineId,
-          routineName: current.name,
-          action: "propose_edit",
-          by: "alice",
-          at: proposal.proposedAt,
-        });
-        return jsonResponse({ ok: true, proposalId: proposal.proposalId, status: "pending_approval" }, { status: 201, headers: cors });
-      }
-
-      // ---- GET /api/routines/pending (Renata, authenticated) ----
-      if (url.pathname === "/api/routines/pending" && request.method === "GET") {
-        const username = await requireAuth(request, env);
-        if (!username) return jsonResponse({ error: "not authenticated" }, { status: 401, headers: cors });
-        const pending = await getPendingProposals(env);
-        const custom = await getCustomRoutines(env);
-        const enriched = pending.map((p) => ({
-          ...p,
-          current: p.type === "edit" ? custom[p.routineId] || null : null,
-        }));
-        return jsonResponse({ pending: enriched }, { headers: cors });
-      }
-
-      // ---- POST /api/routines/pending/:proposalId/approve ----
-      const approveMatch = url.pathname.match(/^\/api\/routines\/pending\/([\w-]+)\/approve$/);
-      if (approveMatch && request.method === "POST") {
-        const username = await requireAuth(request, env);
-        if (!username) return jsonResponse({ error: "not authenticated" }, { status: 401, headers: cors });
-
-        const proposalId = approveMatch[1];
-        const pending = await getPendingProposals(env);
-        const idx = pending.findIndex((p) => p.proposalId === proposalId);
-        if (idx === -1) return jsonResponse({ error: "proposta não encontrada" }, { status: 404, headers: cors });
-
-        const proposal = pending[idx];
-        const custom = await getCustomRoutines(env);
-
-        if (proposal.type === "create") {
-          custom[proposal.routineId] = {
-            ...proposal.payload,
-            createdBy: "alice",
-            createdAt: proposal.proposedAt,
-            approvedBy: username,
-            approvedAt: new Date().toISOString(),
-          };
-          if (proposal.payload.defaultOn) {
-            await setRoutineState(env, proposal.routineId, true);
-          }
-        } else if (proposal.type === "edit") {
-          const existing = custom[proposal.routineId];
-          if (!existing) {
-            return jsonResponse({ error: "a rotina original não existe mais" }, { status: 404, headers: cors });
-          }
-          custom[proposal.routineId] = {
-            ...existing,
-            ...proposal.payload,
-            updatedBy: username,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-
-        await setCustomRoutines(env, custom);
-        pending.splice(idx, 1);
-        await setPendingProposals(env, pending);
-        await appendLog(env, {
-          routineId: proposal.routineId,
-          routineName: custom[proposal.routineId]?.name || proposal.routineId,
-          action: proposal.type === "create" ? "approve_create" : "approve_edit",
-          by: username,
-          at: new Date().toISOString(),
-        });
-        return jsonResponse({ ok: true }, { headers: cors });
-      }
-
-      // ---- POST /api/routines/pending/:proposalId/reject ----
-      const rejectMatch = url.pathname.match(/^\/api\/routines\/pending\/([\w-]+)\/reject$/);
-      if (rejectMatch && request.method === "POST") {
-        const username = await requireAuth(request, env);
-        if (!username) return jsonResponse({ error: "not authenticated" }, { status: 401, headers: cors });
-
-        const proposalId = rejectMatch[1];
-        const pending = await getPendingProposals(env);
-        const idx = pending.findIndex((p) => p.proposalId === proposalId);
-        if (idx === -1) return jsonResponse({ error: "proposta não encontrada" }, { status: 404, headers: cors });
-
-        const proposal = pending[idx];
-        pending.splice(idx, 1);
-        await setPendingProposals(env, pending);
-        await appendLog(env, {
-          routineId: proposal.routineId,
-          routineName: proposal.payload?.name || proposal.routineId,
-          action: proposal.type === "create" ? "reject_create" : "reject_edit",
-          by: username,
-          at: new Date().toISOString(),
-        });
-        return jsonResponse({ ok: true }, { headers: cors });
-      }
-
-      return jsonResponse({ error: "not found" }, { status: 404, headers: cors });
+      return withHeaders(await handle(request, env, ctx), cors);
     } catch (err) {
-      return jsonResponse({ error: String(err) }, { status: 500, headers: cors });
+      const status = err instanceof HttpError ? err.status : 500;
+      if (status === 500) console.error(err);
+      return json({ error: err instanceof HttpError ? err.message : "erro interno — veja os logs do Worker" }, status, cors);
     }
   },
+  scheduled,
 };
