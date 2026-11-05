@@ -94,6 +94,7 @@
   /* ===== app: menu lateral + conteúdo ===== */
   .app{ display:grid; grid-template-columns:288px minmax(0,1fr); min-height:100vh; }
   .sidebar{ background:var(--surface); border-right:1px solid var(--border); padding:28px 22px; display:flex; flex-direction:column; gap:26px; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .sidebar > *{ flex-shrink:0; }
   .sidebar .brand{ width:176px; height:auto; display:block; }
   .agent{ background:var(--gsp-verde-escuro); color:#fff; border-radius:var(--radius); padding:22px 18px 18px; text-align:center; position:relative; overflow:hidden; }
   .agent .avatar{ width:104px; height:104px; border-radius:50%; background:#fff; padding:4px; display:block; margin:0 auto; position:relative; }
@@ -257,6 +258,15 @@
 
   footer{ margin-top:56px; padding-top:18px; border-top:1px solid var(--border); font-size:0.82rem; color:var(--text-faint); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
+  @media (min-width:821px) and (max-height:760px){
+    .sidebar{ gap:16px; padding-top:20px; padding-bottom:16px; }
+    .agent{ padding:16px 14px 14px; }
+    .agent .avatar{ width:76px; height:76px; }
+    .agent-name{ margin-top:8px; font-size:1.05rem; }
+    .agent-status{ margin-top:10px; }
+    .agent .mini-stripes{ margin:12px -14px -14px; }
+    .tab{ padding:10px 14px; }
+  }
   /* ===== tablet ===== */
   @media (max-width:1080px){
     .app{ grid-template-columns:240px minmax(0,1fr); }
@@ -639,7 +649,8 @@ async function showDashboard(username) {
   $("dashboard-view").hidden = false;
   $("whoami").textContent = username;
   const hora = new Date().getHours();
-  const nome = username.charAt(0).toUpperCase() + username.slice(1);
+  const primeiro = username.split(/[._@\s-]/)[0] || username;
+  const nome = primeiro.charAt(0).toUpperCase() + primeiro.slice(1);
   $("hello").textContent = `${hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite"}, ${nome}`;
   await refreshAll();
   startPolling();
