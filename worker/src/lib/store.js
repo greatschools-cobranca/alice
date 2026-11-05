@@ -2,6 +2,7 @@
 // propostas da Alice, últimas execuções e tarefas.
 import { HttpError, isValidSlug, invTs, randomHex, clip } from "./util.js";
 import { fila } from "./fila.js";
+import { bridgeValue } from "./bridge-state.js";
 
 // ---------- validação de rotina ----------
 
@@ -57,21 +58,34 @@ export function sanitizeRoutineFields(body, { partial = false } = {}) {
 // ---------- rotinas ----------
 
 export async function getRoutineDefs(env) {
-  return (await env.ROTINAS.get("routines", "json")) || {};
+  let c = await fila(env).control();
+  if (!c) {
+    const defs = (await env.ROTINAS.get("routines", "json")) || {};
+    const legacy = (await env.ROTINAS.get("state", "json")) || {};
+    const states = {};
+    for (const [id, def] of Object.entries(defs)) {
+      const v = await env.ROTINAS.get(`state:${id}`);
+      states[id] = v === null ? (Object.hasOwn(legacy, id) ? !!legacy[id] : !!def.defaultOn) : v === "1";
+    }
+    c = await fila(env).control({ defs, states });
+  }
+  return Object.defineProperty(c.defs, "_revision", { value: c.revision, enumerable: false });
 }
 
 export async function setRoutineDefs(env, map) {
-  await env.ROTINAS.put("routines", JSON.stringify(map));
+  bridgeValue(await fila(env).replaceDefs(map, map._revision));
 }
 
 /** Estado de cada rotina fica numa chave própria, para dois toggles simultâneos não se atropelarem. */
 export async function getState(env, id, defaultOn) {
-  const v = await env.ROTINAS.get(`state:${id}`);
-  return v === null ? !!defaultOn : v === "1";
+  await getRoutineDefs(env);
+  const c = await fila(env).control();
+  return c.states[id] === true;
 }
 
 export async function setState(env, id, on) {
-  await env.ROTINAS.put(`state:${id}`, on ? "1" : "0");
+  await getRoutineDefs(env);
+  bridgeValue(await fila(env).setRoutineState(id, on));
 }
 
 export async function getLastRun(env, id) {
@@ -120,7 +134,7 @@ export function newProposalId() {
 // Ficam no Durable Object (consistência imediata entre o painel e a ponte/Alice).
 // id = t<timestamp invertido>-<aleatório> (lista sai do mais novo pro mais antigo).
 
-export const TASK_STATUSES = ["queued", "sent", "running", "done", "error", "send_failed"];
+export const TASK_STATUSES = ["queued", "sent", "running", "done", "error", "send_failed", "uncertain", "skipped"];
 
 export function newTaskId() {
   return `t${invTs()}-${randomHex(3)}`;

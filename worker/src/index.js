@@ -1,50 +1,8 @@
-/**
- * Torre de Controle — backend (Cloudflare Worker)
- *
- * Painel (Authorization: Bearer <token do /api/login>):
- *   POST /api/login                         { username, password } -> { token, username, expiresAt }
- *   GET  /api/session                       -> { username }
- *   GET  /api/health                        -> o que está configurado/conectado (OpenClaw, e-mail)
- *   GET  /api/routines                      -> rotinas com estado e última execução
- *   POST /api/routines/save                 { id, name, schedule, description, note, prompt, steps, checks, defaultOn }
- *   POST /api/routines/import               { routines: [...] } (cria ou substitui por id)
- *   POST /api/routines/:id/state            { on: true|false }
- *   POST /api/routines/:id/delete
- *   GET  /api/routines/pending              propostas da Alice aguardando aprovação
- *   POST /api/routines/pending/:pid/approve | /reject
- *   GET  /api/audit?limit=&cursor=          linha do tempo (auditoria)
- *   GET  /api/audit/:id                     evento completo
- *   POST /api/test-email                    manda um e-mail de teste
- *   POST /api/files                         corpo = arquivo cru; X-File-Name; até 20 MB -> { id, ... }
- *   GET  /api/chat                          histórico da conversa do usuário
- *   POST /api/chat                          { message, files: [ids] } -> stream SSE da resposta da Alice
- *   POST /api/chat/reset                    começa uma conversa nova
- *   GET  /api/tasks | GET /api/tasks/:id
- *   POST /api/tasks                         { title, description, files: [ids], routineId? }
- *   POST /api/tasks/:id/resend
- *
- * Público:
- *   GET  /api/routines/status               [{ id, on }] — a Alice consulta antes de rodar
- *   GET  /api/files/:id?exp=&sig=           download por link assinado
- *
- * Alice (cabeçalho X-Agent-Key = ALICE_API_KEY):
- *   GET  /api/agent/routines                definições completas + estado
- *   POST /api/agent/routines                propõe rotina nova (vai para aprovação)
- *   POST /api/agent/routines/:id            propõe edição de rotina criada por ela
- *   POST /api/agent/runs                    reporta execução { routineId?, title?, status, summary, details? }
- *   GET  /api/agent/tasks/:id               detalhes da tarefa (com links dos arquivos)
- *   POST /api/agent/tasks/:id               atualiza tarefa { status: running|done|error, result?, files? }
- *   POST /api/agent/files                   envia arquivo de resultado (mesmo formato do /api/files)
- *
- * Ponte de saída (setup/ponte/ponte-torre.mjs; mesmo X-Agent-Key) — usada quando OPENCLAW_BASE_URL não está definido:
- *   GET  /api/agent/bridge/next             próximo pedido da fila (204 se vazio); registra que a ponte está viva
- *   POST /api/agent/bridge/jobs/:id/progress  { text } resposta parcial da conversa
- *   POST /api/agent/bridge/jobs/:id/done      { text?, error?, runId? }
- *   (painel) GET /api/chat/jobs/:id         acompanha a resposta da conversa no modo ponte
- *
- * Segredos: JWT_SECRET, USERS_JSON, ALICE_API_KEY, OPENCLAW_BASE_URL, OPENCLAW_GATEWAY_TOKEN,
- *   OPENCLAW_HOOKS_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, MAIL_WEBHOOK_URL,
- *   MAIL_WEBHOOK_SECRET, AUDIT_EMAIL_TO, ROUTINE_WEBHOOK_URL (opcional). Detalhes em setup/CONFIGURAR.md.
+/** Torre de Controle: protocolo 2 de saída, restrito a rotinas cadastradas.
+ * Painel autenticado: /api/routines, /api/tasks e /api/health.
+ * Ponte exclusiva: /api/bridge/v2/{status,control,heartbeat,next,jobs/:id/result}.
+ * X-Bridge-Key não é X-Agent-Key. Tokens do Gateway ficam somente na VPS.
+ * Conversa livre e reenvio automático permanecem bloqueados.
  */
 import { HttpError, json, corsHeaders, withHeaders, readJson, isValidSlug, clip, spNow } from "./lib/util.js";
 import { login, makeSessionToken, requireUser, requireAgent, SESSION_TTL_SECONDS } from "./lib/auth.js";
@@ -69,10 +27,13 @@ import {
   listTasks,
 } from "./lib/store.js";
 import { storeUpload, serveSignedFile, resolveFiles, fmtSize } from "./lib/files.js";
-import { openChatStream, collectSseText, submitTask, chatConfigured, hooksConfigured, ping, bridgeMode } from "./lib/openclaw.js";
+import { chatConfigured, hooksConfigured, ping, bridgeMode } from "./lib/openclaw.js";
 import { scheduled } from "./cron.js";
 import { fila, Fila } from "./lib/fila.js";
-import { applyTaskDelivery, syncQueuedTask } from "./lib/delivery.js";
+import { syncQueuedTask } from "./lib/delivery.js";
+import { routeBridge, controlSnapshot } from "./lib/bridge-api.js";
+import { auditRequest } from "./lib/bridge-audit.js";
+import { routineVersion, BridgeError, bridgeValue } from "./lib/bridge-state.js";
 import { migrateLegacy } from "./lib/migrate.js";
 
 const RUN_STATUSES = ["started", "ok", "error", "skipped", "wait"];
@@ -83,14 +44,6 @@ function apiBase(request, env) {
   return (env.API_BASE_URL || new URL(request.url).origin).replace(/\/+$/, "");
 }
 
-function filesBlock(files) {
-  if (!files.length) return "";
-  return (
-    "\n\nArquivos anexados (links válidos por 72h — baixe com: curl -L -o \"<nome>\" \"<link>\"):\n" +
-    files.map((f) => `- ${f.name} (${fmtSize(f.size)}): ${f.url}`).join("\n")
-  );
-}
-
 function stripUrls(files) {
   return files.map(({ url, ...rest }) => rest);
 }
@@ -98,21 +51,6 @@ function stripUrls(files) {
 async function withFreshUrls(env, base, files) {
   return resolveFiles(env, base, (files || []).map((f) => f.id)).catch(() =>
     (files || []).map((f) => ({ ...f, url: null, expired: true }))
-  );
-}
-
-function taskMessage(task, files, base) {
-  return (
-    `[Torre de Controle] Nova tarefa solicitada por ${task.createdBy}.\n` +
-    `ID da tarefa: ${task.id}\n` +
-    (task.routineName ? `Rotina relacionada: ${task.routineName} (${task.routineId})\n` : "") +
-    `\nTítulo: ${task.title}\n\nO que fazer:\n${task.description}` +
-    filesBlock(files) +
-    `\n\nSiga a skill "torre-de-controle":\n` +
-    `1. Ao começar: POST ${base}/api/agent/tasks/${task.id} com {"status":"running"}.\n` +
-    `2. Ao terminar: POST ${base}/api/agent/tasks/${task.id} com {"status":"done","result":"<resumo em markdown>","files":["<ids enviados em /api/agent/files>"]}.\n` +
-    `3. Se não conseguir: {"status":"error","result":"<o que deu errado e o que falta>"}.\n` +
-    `Use o cabeçalho X-Agent-Key.`
   );
 }
 
@@ -133,13 +71,16 @@ async function routeUser(request, env, ctx, url, path, method) {
       mail: { configured: mailConfigured(env) },
       agentKey: { configured: !!env.ALICE_API_KEY },
       routineWebhook: { configured: !!env.ROUTINE_WEBHOOK_URL },
+      bridge: conn.bridge || { online: false, gateway: false, protocol: 2 },
+      executionEnabled: hooksConfigured(env) && conn.ok && conn.bridge?.mode === "active",
+      scope: "registered_routines_only",
     });
   }
 
   // ----- rotinas
   if (path === "/api/routines" && method === "GET") {
     await migrateLegacy(env);
-    return json({ routines: await listRoutines(env) });
+    return json({ routines: await Promise.all((await listRoutines(env)).map(async r => ({ ...r, version: await routineVersion(r) }))) });
   }
 
   if (path === "/api/routines/save" && method === "POST") {
@@ -324,45 +265,7 @@ async function routeUser(request, env, ctx, url, path, method) {
   }
 
   if (path === "/api/chat" && method === "POST") {
-    const body = await readJson(request);
-    const message = typeof body.message === "string" ? body.message.trim() : "";
-    if (!message) throw new HttpError(400, "escreva uma mensagem");
-    if (message.length > 8000) throw new HttpError(400, "mensagem longa demais (máx. 8000 caracteres)");
-    const files = await resolveFiles(env, base, body.files);
-    const n = Number((await env.ROTINAS.get(`chatsession:${user}`)) || 0);
-    const sessionKey = `torre-${user}-${n}`;
-    const content = `[Mensagem de ${user} pela Torre de Controle]\n\n${message}${filesBlock(files)}`;
-    const userMsg = { role: "user", text: message, files: stripUrls(files), at: new Date().toISOString() };
-
-    // Modo ponte: põe na fila; o painel acompanha em /api/chat/jobs/:id
-    if (bridgeMode(env)) {
-      if (!chatConfigured(env)) throw new HttpError(503, "a conversa ainda não foi ligada");
-      const job = await fila(env).enqueue("chat", user, { sessionKey, content, filesCount: files.length });
-      await fila(env).appendHistory(user, [userMsg]);
-      return json({ jobId: job.id }, 202);
-    }
-
-    const upstream = await openChatStream(env, sessionKey, content);
-    await fila(env).appendHistory(user, [userMsg]);
-
-    const [toClient, toStore] = upstream.body.tee();
-    ctx.waitUntil(
-      (async () => {
-        const { text, error } = await collectSseText(toStore);
-        await fila(env).appendHistory(user, [{ role: "assistant", text: text || "", error: error || undefined, at: new Date().toISOString() }]);
-        if (files.length || error) {
-          await record(env, null, {
-            type: "chat_message",
-            severity: error ? "warn" : "info",
-            actor: user,
-            summary: error ? `Erro na conversa com a Alice: ${clip(error, 200)}` : `Enviou ${files.length} arquivo(s) para a Alice pela conversa`,
-          });
-        }
-      })()
-    );
-    return new Response(toClient, {
-      headers: { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache" },
-    });
+    throw new HttpError(403, "Conversa livre indisponível nesta etapa; use uma rotina cadastrada.");
   }
 
   // ----- tarefas
@@ -380,107 +283,24 @@ async function routeUser(request, env, ctx, url, path, method) {
   }
 
   if (path === "/api/tasks" && method === "POST") {
+    if (!bridgeMode(env) || env.ROUTINE_EXECUTION_ENABLED !== "true") throw new HttpError(503, "Execução pela ponte ainda não homologada.");
     const body = await readJson(request);
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const description = typeof body.description === "string" ? body.description.trim() : "";
-    if (!title || title.length > 150) throw new HttpError(400, "dê um título de até 150 caracteres");
-    if (!description || description.length > 10000) throw new HttpError(400, "descreva a atividade (até 10.000 caracteres)");
-    const files = await resolveFiles(env, base, body.files);
-    let routine = null;
-    if (body.routineId) routine = (await requireRoutine(env, body.routineId)).routine;
-
+    if (Object.keys(body).some(k => !["requestId", "routineId", "version"].includes(k))) throw new HttpError(400, "Anexos, comandos e instruções livres não são aceitos nesta etapa.");
+    const routine = (await requireRoutine(env, body.routineId)).routine;
+    if (body.version !== await routineVersion(routine)) throw new HttpError(409, "A rotina mudou; atualize e revise novamente.");
     const now = new Date().toISOString();
-    const task = {
-      id: newTaskId(),
-      title,
-      description,
-      routineId: routine?.id,
-      routineName: routine?.name,
-      files: stripUrls(files),
-      status: "queued",
-      createdBy: user,
-      createdAt: now,
-      updatedAt: now,
-      history: [{ at: now, status: "queued", by: user }],
-    };
-    return json(await dispatchTask(env, ctx, task, files, base, user), 201);
+    const task = { id: newTaskId(), title: `Executar: ${routine.name}`, routineId: routine.id, routineName: routine.name, files: [], status: "queued", createdBy: user, createdAt: now, updatedAt: now, history: [{ at: now, status: "queued", by: user }] };
+    const job = bridgeValue(await fila(env).enqueueRoutine(user, body.requestId, routine.id, body.version, task));
+    if (!job.duplicate) await auditRequest(env, ctx, user, task);
+    return json({ ok: true, task: await getTask(env, job.taskId), duplicate: !!job.duplicate }, job.duplicate ? 200 : 201);
   }
 
   if ((m = path.match(/^\/api\/tasks\/([\w-]+)\/resend$/)) && method === "POST") {
-    const task = await getTask(env, m[1]);
-    if (!task) throw new HttpError(404, "tarefa não encontrada");
-    if (["done", "running"].includes(task.status)) throw new HttpError(409, "a tarefa já está em andamento ou concluída");
-    if (task.status === "queued" && task.jobId) {
-      const job = await fila(env).get(task.jobId);
-      if (job && ["pending", "taken"].includes(job.status)) throw new HttpError(409, "a tarefa ainda está na fila esperando a ponte");
-    }
-    const files = await resolveFiles(env, base, task.files.map((f) => f.id));
-    return json(await dispatchTask(env, ctx, task, files, base, user));
+    throw new HttpError(409, "Reenvio automático bloqueado. Confira a execução e registre um novo pedido apenas após reconciliação.");
   }
 
   throw new HttpError(404, "rota não encontrada");
 }
-
-async function dispatchTask(env, ctx, task, files, base, user) {
-  let sendError = null;
-  task.attempts = (task.attempts || 0) + 1;
-
-  // Modo ponte: a tarefa entra na fila; a ponte confirma (ou não) a entrega em /api/agent/bridge/jobs/:id/done
-  if (bridgeMode(env)) {
-    const job = await fila(env).enqueue("task", user, {
-      taskId: task.id,
-      message: taskMessage(task, files, base),
-      name: `Torre: ${task.title}`.slice(0, 100),
-      idempotencyKey: `${task.id}-${task.attempts}`,
-    });
-    task.jobId = job.id;
-    task.status = "queued";
-    task.error = undefined;
-    task.updatedAt = new Date().toISOString();
-    task.history.push({ at: task.updatedAt, status: "queued", by: user, note: "aguardando a ponte retirar" });
-    await saveTask(env, task);
-    await record(env, ctx, {
-      type: "task_queued",
-      actor: user,
-      taskId: task.id,
-      routineId: task.routineId,
-      routineName: task.routineName,
-      summary: `Pediu à Alice: "${task.title}"${task.files.length ? ` (${task.files.length} arquivo(s))` : ""}`,
-    });
-    return { ok: true, task: { ...task, files }, error: null };
-  }
-
-  try {
-    const { runId } = await submitTask(env, task, taskMessage(task, files, base));
-    task.runId = runId;
-    task.status = "sent";
-  } catch (err) {
-    sendError = err.message || String(err);
-    task.status = "send_failed";
-    task.error = sendError;
-  }
-  task.updatedAt = new Date().toISOString();
-  task.history.push({ at: task.updatedAt, status: task.status, by: user, note: sendError || undefined });
-  await saveTask(env, task);
-  await record(
-    env,
-    ctx,
-    {
-      type: sendError ? "task_send_failed" : "task_sent",
-      severity: sendError ? "error" : "info",
-      actor: user,
-      taskId: task.id,
-      routineId: task.routineId,
-      routineName: task.routineName,
-      summary: sendError
-        ? `Não consegui enviar a tarefa "${task.title}" para a Alice: ${clip(sendError, 200)}`
-        : `Pediu à Alice: "${task.title}"${task.files.length ? ` (${task.files.length} arquivo(s))` : ""}`,
-    },
-    { alert: !!sendError }
-  );
-  return { ok: !sendError, task: { ...task, files }, error: sendError };
-}
-
 
 // ------------------------------------------------------------------ rotas da Alice
 
@@ -489,49 +309,7 @@ async function routeAgent(request, env, ctx, url, path, method) {
   const base = apiBase(request, env);
   let m;
 
-  // ----- ponte de saída (setup/ponte/ponte-torre.mjs)
-  if (path === "/api/agent/bridge/next" && method === "GET") {
-    const job = await fila(env).next();
-    if (!job) return new Response(null, { status: 204 });
-    return json({ id: job.id, type: job.type, payload: job.payload });
-  }
-
-  if ((m = path.match(/^\/api\/agent\/bridge\/jobs\/(j\w+)\/progress$/)) && method === "POST") {
-    const body = await readJson(request);
-    const job = await fila(env).progress(m[1], body.text);
-    return json({ ok: !!job });
-  }
-
-  if ((m = path.match(/^\/api\/agent\/bridge\/jobs\/(j\w+)\/done$/)) && method === "POST") {
-    const body = await readJson(request);
-    const data = {
-      text: typeof body.text === "string" ? body.text : undefined,
-      error: body.error ? clip(String(body.error), 1000) : undefined,
-      runId: body.runId ? String(body.runId) : undefined,
-    };
-    const job = await fila(env).finish(m[1], data);
-    if (!job) return json({ ok: false, reason: "pedido já encerrado ou inexistente" });
-
-    if (job.type === "chat") {
-      await fila(env).appendHistory(job.user, [
-        { role: "assistant", text: job.text || "", error: job.error || undefined, at: new Date().toISOString() },
-      ]);
-      if (job.error || job.payload?.filesCount) {
-        await record(env, ctx, {
-          type: "chat_message",
-          severity: job.error ? "warn" : "info",
-          actor: job.user,
-          summary: job.error
-            ? `Erro na conversa com a Alice: ${clip(job.error, 200)}`
-            : `Enviou ${job.payload.filesCount} arquivo(s) para a Alice pela conversa`,
-        });
-      }
-    } else if (job.type === "task") {
-      const task = await getTask(env, job.payload.taskId);
-      if (task) await applyTaskDelivery(env, ctx, task, { error: job.error, runId: job.runId }, "ponte");
-    }
-    return json({ ok: true });
-  }
+  if (path.startsWith("/api/agent/bridge/")) throw new HttpError(410, "Ponte antiga desativada; use protocolo 2 com chave própria.");
 
   if (path === "/api/agent/routines" && method === "GET") {
     return json({ routines: await listRoutines(env) });
@@ -666,6 +444,13 @@ async function handle(request, env, ctx) {
   const path = url.pathname;
   const method = request.method;
 
+  // Mesmo nível de divulgação do status público anterior, acrescido de revisão opaca.
+  // O gatilho não recebe a chave da ponte nem segredos do Gateway.
+  if (path === "/api/routines/gate" && method === "GET") {
+    const snapshot = await controlSnapshot(env);
+    return json({ ...snapshot, routines: snapshot.routines.map(({ id, on, version }) => ({ id, on, version })) }, 200, { "Cache-Control": "no-store, max-age=0" });
+  }
+
   if (path === "/api/login" && method === "POST") {
     const body = await readJson(request);
     const username = await login(env, body.username, body.password, (u) =>
@@ -686,6 +471,7 @@ async function handle(request, env, ctx) {
     return serveSignedFile(env, m[1], url);
   }
 
+  if (path.startsWith("/api/bridge/v2/")) return routeBridge(request, env, path, method, ctx);
   if (path.startsWith("/api/agent/")) return routeAgent(request, env, ctx, url, path, method);
   if (path.startsWith("/api/")) return routeUser(request, env, ctx, url, path, method);
   throw new HttpError(404, "rota não encontrada");
@@ -700,9 +486,9 @@ export default {
     try {
       return withHeaders(await handle(request, env, ctx), cors);
     } catch (err) {
-      const status = err instanceof HttpError ? err.status : 500;
-      if (status === 500) console.error(err);
-      return json({ error: err instanceof HttpError ? err.message : "erro interno — veja os logs do Worker" }, status, cors);
+      const status = err instanceof HttpError || err instanceof BridgeError ? err.status : 500;
+      if (status === 500) console.error("request_failed");
+      return json({ error: err instanceof HttpError || err instanceof BridgeError ? err.message : "erro interno — veja os logs do Worker" }, status, cors);
     }
   },
   scheduled,

@@ -4,6 +4,7 @@
 // (setup/ponte/ponte-torre.mjs) consulta esta fila por HTTPS de saída e repassa os pedidos
 // para o gateway em localhost. Nada no servidor fica exposto à internet.
 import { DurableObject } from "cloudflare:workers";
+import { BridgeState, bridgeReply } from "./bridge-state.js";
 
 const CHAT_PENDING_TIMEOUT_MS = 90 * 1000; // conversa sem ser retirada pela ponte
 const TASK_PENDING_TIMEOUT_MS = 30 * 60 * 1000; // tarefa esperando a ponte voltar
@@ -16,6 +17,16 @@ function rand() {
 }
 
 export class Fila extends DurableObject {
+  constructor(ctx, env) { super(ctx, env); this.bridge = new BridgeState(ctx.storage); }
+  async control(seed) { return this.bridge.control(seed); }
+  async replaceDefs(defs, expected) { return bridgeReply(() => this.bridge.replaceDefs(defs, expected)); }
+  async setRoutineState(id, on) { return bridgeReply(() => this.bridge.setState(id, on)); }
+  async enqueueRoutine(...args) { return bridgeReply(() => this.bridge.enqueue(...args)); }
+  async bridgeHeartbeat(...args) { return this.bridge.heartbeat(...args); }
+  async bridgeStatus() { return this.bridge.status(); }
+  async bridgeNext() { return this.bridge.next(); }
+  async bridgeResult(...args) { return bridgeReply(() => this.bridge.result(...args)); }
+  async bridgeGet(id) { return this.bridge.get(id); }
   // ---------- histórico da conversa (usado nos dois modos) ----------
 
   async getHistory(user) {

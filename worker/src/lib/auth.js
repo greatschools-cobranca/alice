@@ -115,6 +115,13 @@ export function requireAgent(request, env) {
   return "alice";
 }
 
+// A chave da ponte não permite propor rotinas, baixar arquivos nem operar o agente.
+export function requireBridge(request, env) {
+  const value = request.headers.get("X-Bridge-Key") || "";
+  if (!env.BRIDGE_API_KEY || !safeEqual(value, env.BRIDGE_API_KEY)) throw new HttpError(401, "chave da ponte inválida ou ausente");
+  return "ponte";
+}
+
 /**
  * Valida usuário e senha com limite de tentativas.
  * Retorna { username, locked?: true } ou lança HttpError.

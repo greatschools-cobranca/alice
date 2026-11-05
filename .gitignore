@@ -3,3 +3,6 @@ node_modules/
 .dev.vars
 *.log
 rotinas-seed*.json
+
+__pycache__/
+*.pyc
