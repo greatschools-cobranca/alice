@@ -186,7 +186,7 @@
   <div class="login-card">
     <span class="status-dot" aria-hidden="true" style="margin-bottom:14px"></span>
     <h1>Torre de Controle</h1>
-    <p class="sub">Entre para acompanhar, conversar e acionar a Alice.</p>
+    <p class="sub">Entre para acompanhar e acionar as rotinas da Alice.</p>
     <form id="login-form">
       <label for="username">Usuário</label>
       <input type="text" id="username" autocomplete="username" required>
@@ -224,14 +224,15 @@
   </div>
 
   <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="chat" aria-selected="true">Conversa</button>
+    <!-- Conversa oculta nesta etapa (backend também bloqueia). Para voltar, remova "hidden" e CHAT_HIDDEN. -->
+    <button class="tab" role="tab" data-tab="chat" aria-selected="false" hidden>Conversa</button>
+    <button class="tab" role="tab" data-tab="routines" aria-selected="true">Rotinas</button>
     <button class="tab" role="tab" data-tab="tasks" aria-selected="false">Tarefas</button>
-    <button class="tab" role="tab" data-tab="routines" aria-selected="false">Rotinas</button>
     <button class="tab" role="tab" data-tab="audit" aria-selected="false">Auditoria</button>
   </nav>
 
   <!-- ----- Conversa ----- -->
-  <section id="tab-chat" role="tabpanel">
+  <section id="tab-chat" role="tabpanel" hidden>
     <div class="card chat">
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">Carregando conversa…</div></div>
       <form class="composer" id="chat-form">
@@ -283,7 +284,7 @@
   </section>
 
   <!-- ----- Rotinas ----- -->
-  <section id="tab-routines" role="tabpanel" hidden>
+  <section id="tab-routines" role="tabpanel">
     <div class="section-head">
       <div><h2>Rotinas programadas</h2><p>Ligar/desligar fica registrado na auditoria. A integração precisa estar homologada na VPS para o estado ser aplicado à agenda. Rotinas já em execução não são interrompidas.</p></div>
       <div class="actions">
@@ -471,16 +472,18 @@ async function showDashboard(username) {
   $("dashboard-view").hidden = false;
   $("whoami").textContent = username;
   loadHealth();
-  await Promise.all([loadRoutines(), loadPending(), loadChat()]);
+  await Promise.all([loadRoutines(), loadPending()]);
   startPolling();
 }
 
 // ------------------------------------------------------------ abas
-let currentTab = "chat";
+const CHAT_HIDDEN = true;
+let currentTab = "routines";
 document.querySelectorAll(".tab").forEach((t) =>
   t.addEventListener("click", () => selectTab(t.dataset.tab))
 );
 function selectTab(name) {
+  if (name === "chat" && CHAT_HIDDEN) name = "routines";
   currentTab = name;
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === name)));
   ["chat", "tasks", "routines", "audit"].forEach((n) => ($("tab-" + n).hidden = n !== name));
