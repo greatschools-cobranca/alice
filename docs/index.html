@@ -28,7 +28,7 @@
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',system-ui,sans-serif; line-height:1.5; }
   h1,h2,h3{ font-family:'Zilla Slab',Georgia,serif; margin:0; text-wrap:balance; }
-  .mono{ font-family:'IBM Plex Mono',ui-monospace,monospace; }
+  .mono, .num{ font-variant-numeric:tabular-nums; }
   [hidden]{ display:none !important; }
   button{ font-family:inherit; }
   a{ color:var(--accent); }
@@ -68,11 +68,11 @@
   .status-bar .subtitle{ color:var(--text-muted); font-size:0.86rem; margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
   .status-meta{ display:flex; gap:22px; flex-wrap:wrap; align-items:center; }
   .status-meta div{ text-align:right; }
-  .status-meta .k{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); }
+  .status-meta .k{ font-size:0.78rem; color:var(--text-muted); }
   .status-meta .v{ font-size:0.92rem; font-weight:500; margin-top:2px; }
   .linkish{ background:none; border:none; color:var(--text-muted); font-size:0.8rem; cursor:pointer; text-decoration:underline; padding:0; }
 
-  .pill{ font-size:0.68rem; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:20px; display:inline-block; font-weight:600; }
+  .pill{ font-size:0.78rem; padding:2px 10px; border-radius:20px; display:inline-block; font-weight:600; white-space:nowrap; }
   .pill.ok{ background:var(--accent-soft); color:var(--accent-strong); }
   .pill.warn{ background:var(--warn-soft); color:var(--warn); }
   .pill.bad{ background:var(--danger-soft); color:var(--danger); }
@@ -88,7 +88,7 @@
   .section-head h2{ font-size:1.15rem; font-weight:600; }
   .section-head p{ color:var(--text-muted); font-size:0.86rem; margin:4px 0 0; max-width:62ch; }
   .actions{ display:flex; gap:8px; flex-wrap:wrap; }
-  .card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); }
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; }
   .card.pad{ padding:20px; }
   .empty{ color:var(--text-faint); font-size:0.86rem; padding:16px 20px; }
   .note{ background:var(--surface-2); border:1px dashed var(--border); border-radius:12px; padding:14px 18px; font-size:0.85rem; color:var(--text-muted); margin-top:16px; }
@@ -100,11 +100,11 @@
   .glyph{ width:38px; height:38px; border-radius:9px; background:var(--surface-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-muted); }
   .row h3{ font-size:0.95rem; font-weight:600; }
   .line{ color:var(--text-muted); font-size:0.83rem; margin:4px 0 0; }
-  .line.mono{ font-size:0.76rem; color:var(--text-faint); }
+  .line.mono{ font-size:0.83rem; color:var(--text-muted); }
   .row .btns{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
   .btn.navy{ background:var(--navy); border-color:var(--navy); color:#fff; }
   .control{ display:flex; align-items:center; gap:10px; }
-  .state-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap; }
+  .state-label{ font-size:0.82rem; font-weight:500; white-space:nowrap; }
   .state-label.on{ color:var(--accent); } .state-label.off{ color:var(--off); }
   .switch{ position:relative; width:44px; height:25px; flex-shrink:0; border-radius:999px; border:none; cursor:pointer; background:var(--off-soft); transition:background .15s; padding:0; }
   .switch::after{ content:''; position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:var(--surface); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s; }
@@ -140,9 +140,9 @@
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
 
   /* ---- auditoria ---- */
-  .audit-item{ display:grid; grid-template-columns:150px 90px 1fr; gap:12px; padding:11px 20px; border-bottom:1px solid var(--border); font-size:0.84rem; align-items:baseline; }
+  .audit-item{ display:grid; grid-template-columns:56px 92px 1fr; gap:12px; padding:11px 20px; border-bottom:1px solid var(--border); font-size:0.84rem; align-items:baseline; }
   .audit-item:last-child{ border-bottom:none; }
-  .audit-item .when{ font-family:'IBM Plex Mono',monospace; color:var(--text-faint); font-size:0.74rem; }
+  .audit-item .when{ font-variant-numeric:tabular-nums; color:var(--text-muted); font-size:0.84rem; }
   .audit-item .who{ color:var(--text-muted); font-size:0.76rem; display:block; }
 
   /* ---- pendências ---- */
@@ -156,24 +156,88 @@
   .modal-overlay{ position:fixed; inset:0; background:rgba(20,17,10,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
   .modal-card{ background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:26px; max-width:640px; width:100%; max-height:88vh; overflow-y:auto; }
   .modal-card h3{ font-size:1.1rem; font-weight:600; margin-bottom:6px; }
-  .modal-card .sub{ font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--text-faint); margin-bottom:14px; }
+  .modal-card .sub{ font-size:0.84rem; color:var(--text-muted); margin-bottom:14px; }
   .modal-card ol{ padding-left:20px; }
   .modal-card ol > li{ margin-bottom:12px; font-weight:600; font-size:0.9rem; }
   .modal-card ol > li::marker{ color:var(--accent); }
   .modal-card ol ul{ padding-left:18px; margin:6px 0 0; }
   .modal-card ol ul li{ font-weight:400; color:var(--text-muted); font-size:0.86rem; }
-  .block-label{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); margin:16px 0 6px; font-weight:600; }
-  pre.box{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-family:'IBM Plex Mono',monospace; font-size:0.78rem; line-height:1.6; white-space:pre-wrap; word-break:break-word; margin:0; max-height:300px; overflow-y:auto; }
+  .block-label{ font-size:0.86rem; color:var(--text); margin:18px 0 6px; font-weight:600; }
+  pre.box{ background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-family:inherit; font-size:0.86rem; line-height:1.6; white-space:pre-wrap; word-break:break-word; margin:0; max-height:300px; overflow-y:auto; }
   .modal-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+
+  /* ---- cabeçalho e situação ---- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .topbar h1{ font-size:1.6rem; font-weight:600; letter-spacing:-0.01em; }
+  .topbar .who{ display:flex; align-items:center; gap:14px; color:var(--text-muted); font-size:0.9rem; }
+  .situation{ margin-top:18px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 20px; display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center; }
+  .situation .msg-main{ font-size:1rem; font-weight:600; }
+  .situation .msg-sub{ color:var(--text-muted); font-size:0.88rem; margin-top:2px; }
+  .situation .facts{ display:flex; gap:24px; text-align:right; }
+  .situation .facts .v{ font-size:1.3rem; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .situation .facts .k{ font-size:0.78rem; color:var(--text-muted); }
+  .conn-details{ grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; padding-top:12px; border-top:1px solid var(--border); }
+  .updated{ font-size:0.78rem; color:var(--text-muted); }
+
+  /* ---- precisa de atenção ---- */
+  .attention{ margin-top:16px; background:var(--danger-soft); border-radius:14px; padding:16px 20px; }
+  .attention.only-warn{ background:var(--warn-soft); }
+  .attention h2{ font-size:1.05rem; font-weight:600; margin-bottom:8px; }
+  .attention ul{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+  .attention li{ display:flex; justify-content:space-between; gap:12px; align-items:center; font-size:0.9rem; }
+  .attention li .what{ min-width:0; }
+  .attention li .when{ color:var(--text-muted); font-size:0.82rem; }
+
+  /* ---- rotina (cartão) ---- */
+  .rt{ padding:18px 20px; border-bottom:1px solid var(--border); display:grid; grid-template-columns:1fr auto; gap:6px 16px; }
+  .rt:last-child{ border-bottom:none; }
+  .rt h3{ font-size:1.02rem; font-weight:600; }
+  .rt .meta{ display:flex; flex-wrap:wrap; gap:4px 18px; color:var(--text-muted); font-size:0.86rem; margin-top:4px; }
+  .rt .meta b{ color:var(--text); font-weight:500; }
+  .rt .last{ grid-column:1/-1; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; font-size:0.88rem; margin-top:6px; }
+  .rt .last .ago{ color:var(--text-muted); font-size:0.82rem; }
+  .rt .btns{ grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .rt.off h3, .rt.off .meta{ opacity:.6; }
+  .rt.flash{ background:var(--warn-soft); transition:background .6s; }
+  .rt:focus{ outline:none; }
+
+  /* ---- execuções ---- */
+  .exec-form{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px 16px; align-items:end; }
+  .exec-form select{ margin:0; }
+  .exec-preview{ grid-column:1/-1; background:var(--surface-2); border-radius:10px; padding:12px 14px; font-size:0.9rem; }
+  .exec-preview .meta{ color:var(--text-muted); font-size:0.84rem; margin-top:6px; }
+  .gate{ grid-column:1/-1; background:var(--warn-soft); border-radius:10px; padding:10px 14px; font-size:0.88rem; }
+  .task-row{ display:grid; grid-template-columns:1fr auto; gap:4px 16px; padding:14px 20px; border:none; border-bottom:1px solid var(--border); cursor:pointer; background:none; width:100%; text-align:left; font:inherit; color:inherit; }
+  .task-row:last-child{ border-bottom:none; }
+  .task-row:hover{ background:var(--surface-2); }
+  .task-row:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+  .task-row .t{ font-weight:600; font-size:0.94rem; }
+  .task-row .pill, .rt .last .pill{ align-self:start; }
+  .attention li .btn{ white-space:nowrap; flex-shrink:0; }
+  .task-row .d{ color:var(--text-muted); font-size:0.85rem; grid-column:1/-1; }
+
+  /* ---- auditoria ---- */
+  .filters{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .chip-btn{ border:1px solid var(--border); background:var(--surface); border-radius:999px; padding:6px 12px; font-size:0.84rem; cursor:pointer; color:var(--text); }
+  .chip-btn[aria-pressed="true"]{ background:var(--text); border-color:var(--text); color:var(--surface); }
+  .chip-btn .n{ font-variant-numeric:tabular-nums; opacity:.75; margin-left:4px; }
+  .search{ max-width:260px; margin:0 !important; padding:7px 12px !important; }
+  .day{ padding:10px 20px; background:var(--surface-2); font-weight:600; font-size:0.86rem; border-bottom:1px solid var(--border); }
+  .day:first-child{ border-radius:14px 14px 0 0; }
 
   footer{ margin-top:56px; padding-top:18px; border-top:1px solid var(--border); font-size:0.78rem; color:var(--text-faint); }
 
   @media (max-width:640px){
     .status-bar{ flex-direction:column; align-items:flex-start; }
+    .situation{ grid-template-columns:auto 1fr; }
+    .situation .facts{ grid-column:1/-1; text-align:left; }
+    .exec-form{ grid-template-columns:1fr; }
+    .audit-item{ grid-template-columns:52px 1fr; }
+    .audit-item .sev{ display:none; }
+    .search{ max-width:none; width:100%; }
     .status-meta div{ text-align:left; }
     .row{ grid-template-columns:auto 1fr; }
     .row .control{ grid-column:1/3; }
-    .audit-item{ grid-template-columns:1fr; gap:2px; }
     .grid2{ grid-template-columns:1fr; }
     .msg{ max-width:92%; }
   }
@@ -200,35 +264,39 @@
 
 <!-- ============ PAINEL ============ -->
 <div class="wrap" id="dashboard-view" hidden>
-  <div class="status-bar">
-    <div class="id">
-      <span class="status-dot off" id="conn-dot" aria-hidden="true"></span>
-      <div>
-        <h1>Alice · Agente IA</h1>
-        <div class="subtitle" id="health-pills"><span>Verificando conexões…</span></div>
-      </div>
-    </div>
-    <div class="status-meta">
-      <div><div class="k">Rotinas ligadas</div><div class="v mono" id="onCount">—</div></div>
-      <div><div class="k">Sessão</div><div class="v" id="whoami">—</div></div>
-      <div><button class="linkish" id="logout-btn">Sair</button></div>
-    </div>
-  </div>
+  <header class="topbar">
+    <h1>Torre de Controle da Alice</h1>
+    <div class="who"><span>Olá, <b id="whoami">—</b></span><button class="linkish" id="logout-btn">Sair</button></div>
+  </header>
 
-  <div class="section" id="pending-section" hidden>
-    <div class="section-head"><div>
-      <h2>Pendências da Alice <span class="pill warn" id="pendingCount">0</span></h2>
-      <p>Rotinas novas ou alterações que a Alice propôs — só valem depois que alguém aprovar aqui.</p>
-    </div></div>
-    <div class="card pending-list" id="pendingList"></div>
-  </div>
+  <!-- Situação em uma frase; detalhes técnicos só se a pessoa pedir -->
+  <section class="situation" aria-live="polite">
+    <span class="status-dot off" id="conn-dot" aria-hidden="true"></span>
+    <div>
+      <div class="msg-main" id="sit-main">Verificando a conexão com a Alice…</div>
+      <div class="msg-sub"><span id="sit-sub"></span> <button class="linkish" id="conn-toggle" aria-expanded="false" aria-controls="health-pills">Ver detalhes da conexão</button></div>
+    </div>
+    <div class="facts">
+      <div><div class="v" id="onCount">—</div><div class="k">rotinas ligadas</div></div>
+      <div><div class="v" id="attnCount">—</div><div class="k">pedem atenção</div></div>
+    </div>
+    <div class="conn-details" id="health-pills" hidden></div>
+  </section>
+
+  <!-- O que precisa de alguém agora -->
+  <section class="attention" id="attention" hidden aria-labelledby="attention-title">
+    <h2 id="attention-title">Precisa de atenção</h2>
+    <ul id="attentionList"></ul>
+  </section>
+
 
   <nav class="tabs" role="tablist">
     <!-- Conversa oculta nesta etapa (backend também bloqueia). Para voltar, remova "hidden" e CHAT_HIDDEN. -->
     <button class="tab" role="tab" data-tab="chat" aria-selected="false" hidden>Conversa</button>
     <button class="tab" role="tab" data-tab="routines" aria-selected="true">Rotinas</button>
-    <button class="tab" role="tab" data-tab="tasks" aria-selected="false">Tarefas</button>
+    <button class="tab" role="tab" data-tab="tasks" aria-selected="false">Execuções<span class="count" id="tasksBadge" hidden></span></button>
     <button class="tab" role="tab" data-tab="audit" aria-selected="false">Auditoria</button>
+    <span class="updated" id="updatedAt" style="margin-left:auto;align-self:center"></span>
   </nav>
 
   <!-- ----- Conversa ----- -->
@@ -253,31 +321,21 @@
   <!-- ----- Tarefas ----- -->
   <section id="tab-tasks" role="tabpanel" hidden>
     <div class="card pad">
-      <h2 style="font-size:1.1rem;margin-bottom:14px">Pedir uma atividade à Alice</h2>
-      <form id="task-form">
-        <div class="grid2">
-          <div>
-            <label for="taskTitle">Título</label>
-            <input type="text" id="taskTitle" maxlength="150" readonly placeholder="Ex.: Análise da base de cobrança de hoje">
-          </div>
-          <div>
-            <label for="taskRoutine">Rotina cadastrada (obrigatória)</label>
-            <select id="taskRoutine" required><option value="">— nenhuma —</option></select>
-          </div>
+      <h2 style="font-size:1.15rem;margin-bottom:4px">Executar uma rotina agora</h2>
+      <p class="line" style="margin:0 0 14px">A Alice roda a rotina escolhida exatamente como está cadastrada. Não é possível mandar instruções livres ou anexos nesta etapa.</p>
+      <form id="task-form" class="exec-form">
+        <div>
+          <label for="taskRoutine">Rotina</label>
+          <select id="taskRoutine" required><option value="">Escolha uma rotina</option></select>
         </div>
-        <label for="taskDesc">O que a Alice deve fazer</label>
-        <textarea id="taskDesc" rows="7" maxlength="10000" readonly placeholder="Descreva a atividade, o resultado esperado e para quem enviar, se for o caso."></textarea>
-        <div class="chips" id="taskChips" style="margin-bottom:12px"></div>
-        <div class="error-msg" id="task-error" role="alert"></div>
-        <div class="actions" style="justify-content:space-between">
-          <label class="btn" style="margin:0">Anexos indisponíveis<input type="file" id="taskFile" multiple hidden disabled></label>
-          <button type="submit" class="btn primary" id="task-send">Enviar para a Alice</button>
-        </div>
-        <p class="hint" style="margin:10px 0 0">Nesta etapa só é possível solicitar uma rotina cadastrada, sem anexos ou instruções livres. Edições da rotina precisam de validação na VPS antes da execução.</p>
+        <button type="submit" class="btn primary" id="task-send">Executar agora</button>
+        <div class="exec-preview" id="taskPreview" hidden></div>
+        <div class="gate" id="execGate" hidden></div>
+        <div class="error-msg" id="task-error" role="alert" style="grid-column:1/-1;margin:0"></div>
       </form>
     </div>
     <div class="section">
-      <div class="section-head"><div><h2>Tarefas recentes</h2><p>Atualiza sozinho a cada 30 segundos enquanto esta aba estiver aberta.</p></div>
+      <div class="section-head"><div><h2>Execuções pedidas pela Torre</h2><p>Clique numa linha para ver o que aconteceu. A lista se atualiza sozinha.</p></div>
         <button class="btn small" id="tasks-refresh">Atualizar</button></div>
       <div class="card" id="taskList"><div class="empty">Carregando…</div></div>
     </div>
@@ -285,8 +343,15 @@
 
   <!-- ----- Rotinas ----- -->
   <section id="tab-routines" role="tabpanel">
+  <div class="section" id="pending-section" style="margin:0 0 32px" hidden>
+    <div class="section-head"><div>
+      <h2>Propostas da Alice para aprovar <span class="pill warn" id="pendingCount">0</span></h2>
+      <p>Rotinas novas ou alterações que a Alice sugeriu. Nada muda até alguém aprovar aqui.</p>
+    </div></div>
+    <div class="card pending-list" id="pendingList"></div>
+  </div>
     <div class="section-head">
-      <div><h2>Rotinas programadas</h2><p>Ligar/desligar fica registrado na auditoria. A integração precisa estar homologada na VPS para o estado ser aplicado à agenda. Rotinas já em execução não são interrompidas.</p></div>
+      <div><h2>Rotinas programadas</h2><p>Desligar uma rotina impede as próximas execuções; uma execução que já começou não é interrompida. Toda mudança fica registrada na auditoria.</p></div>
       <div class="actions">
         <button class="btn small" id="routine-new">Nova rotina</button>
         <label class="btn small" style="margin:0">Importar JSON<input type="file" id="routine-import" accept="application/json,.json" hidden></label>
@@ -298,17 +363,16 @@
   <!-- ----- Auditoria ----- -->
   <section id="tab-audit" role="tabpanel" hidden>
     <div class="section-head">
-      <div><h2>Auditoria</h2><p>Tudo o que aconteceu: execuções reportadas pela Alice, rotinas atrasadas, tarefas, liga/desliga, aprovações e logins. Falhas chegam por e-mail na hora; o resumo do dia sai às 18:30.</p></div>
-      <div class="actions">
-        <select id="audit-filter" style="margin:0;width:auto">
-          <option value="">Tudo</option>
-          <option value="error">Só falhas</option>
-          <option value="warn">Falhas e atenção</option>
-          <option value="run">Execuções de rotinas</option>
-          <option value="task">Tarefas</option>
-        </select>
-        <button class="btn small" id="audit-test-email">E-mail de teste</button>
-      </div>
+      <div><h2>Auditoria</h2><p>Tudo o que aconteceu: execuções, falhas, liga/desliga, aprovações e acessos. Falhas chegam por e-mail na hora; o resumo do dia sai às 18:30.</p></div>
+      <button class="btn small" id="audit-test-email">Enviar e-mail de teste</button>
+    </div>
+    <div class="filters" style="margin-bottom:12px" role="group" aria-label="Filtrar auditoria">
+      <button type="button" class="chip-btn" data-f="" aria-pressed="true">Tudo<span class="n" data-n=""></span></button>
+      <button type="button" class="chip-btn" data-f="error" aria-pressed="false">Falhas<span class="n" data-n="error"></span></button>
+      <button type="button" class="chip-btn" data-f="warn" aria-pressed="false">Atenção<span class="n" data-n="warn"></span></button>
+      <button type="button" class="chip-btn" data-f="run" aria-pressed="false">Execuções<span class="n" data-n="run"></span></button>
+      <button type="button" class="chip-btn" data-f="change" aria-pressed="false">Mudanças<span class="n" data-n="change"></span></button>
+      <input type="search" class="search" id="audit-search" placeholder="Buscar (ex.: INA, renata)" aria-label="Buscar na auditoria" style="margin-left:auto">
     </div>
     <div class="card" id="auditList"><div class="empty">Carregando…</div></div>
     <div style="text-align:center;margin-top:14px"><button class="btn small" id="audit-more" hidden>Carregar mais</button></div>
@@ -383,6 +447,29 @@ function md(text) {
 
 function fmtDate(iso) {
   return iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+}
+function fmtTime(iso) {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+/** "Hoje", "Ontem" ou "seg., 03/11" */
+function dayLabel(iso) {
+  const d = new Date(iso), today = new Date();
+  const key = (x) => x.toDateString();
+  const y = new Date(today); y.setDate(today.getDate() - 1);
+  if (key(d) === key(today)) return "Hoje";
+  if (key(d) === key(y)) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+/** "agora há pouco", "há 12 min", "hoje às 15:58", "ontem às 10:02", "03/11 às 09:00" */
+function fmtAgo(iso) {
+  if (!iso) return "";
+  const diff = (Date.now() - new Date(iso).getTime()) / 60000;
+  if (diff < 1) return "agora há pouco";
+  if (diff < 60) return `há ${Math.round(diff)} min`;
+  const lbl = dayLabel(iso);
+  if (lbl === "Hoje") return `hoje às ${fmtTime(iso)}`;
+  if (lbl === "Ontem") return `ontem às ${fmtTime(iso)}`;
+  return `${new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${fmtTime(iso)}`;
 }
 function fmtSize(n) {
   return n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`;
@@ -471,9 +558,15 @@ async function showDashboard(username) {
   $("login-view").hidden = true;
   $("dashboard-view").hidden = false;
   $("whoami").textContent = username;
-  loadHealth();
-  await Promise.all([loadRoutines(), loadPending()]);
+  await refreshAll();
   startPolling();
+}
+
+/** Recarrega o que aparece no topo (situação, atenção, contadores). */
+async function refreshAll() {
+  await Promise.all([loadHealth(), loadRoutines(), loadPending(), loadTasks()]);
+  renderAttention();
+  $("updatedAt").textContent = "Atualizado às " + fmtTime(new Date().toISOString());
 }
 
 // ------------------------------------------------------------ abas
@@ -487,18 +580,18 @@ function selectTab(name) {
   currentTab = name;
   document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === name)));
   ["chat", "tasks", "routines", "audit"].forEach((n) => ($("tab-" + n).hidden = n !== name));
-  if (name === "tasks") loadTasks();
-  if (name === "routines") loadRoutines();
-  if (name === "audit") loadAudit(true);
+  if (name === "tasks") return loadTasks();
+  if (name === "routines") return loadRoutines();
+  if (name === "audit") return loadAudit(true);
+  return Promise.resolve();
 }
 
 let pollTimer = null;
 function startPolling() {
   stopPolling();
   pollTimer = setInterval(() => {
-    if (document.hidden) return;
-    if (currentTab === "tasks") loadTasks();
-    loadPending();
+    if (document.hidden || !$("modal").hidden) return; // não mexe na tela com um diálogo aberto
+    refreshAll();
   }, 30000);
 }
 function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
@@ -508,20 +601,69 @@ let executionEnabled = false;
 async function loadHealth() {
   try {
     const hl = await api("/api/health");
-    const pill = (label, cls, title) => h("span", { class: "pill " + cls, title }, label);
-    const bridge = hl.bridge?.online ? pill("Ponte: conectada", "ok") : pill("Ponte: aguardando conexão", "off");
-    const gateway = hl.bridge?.online && hl.bridge.gateway ? pill("Gateway: verificado", "ok") : pill("Gateway: não verificado", "off");
-    const tasks = hl.executionEnabled ? pill("Rotinas: liberadas", "ok") : pill("Rotinas: aguardando homologação", "off");
-    const mail = hl.mail.configured ? pill("E-mail: configurado", "warn") : pill("E-mail: não configurado", "off");
-    $("health-pills").replaceChildren(bridge, gateway, tasks, mail);
-    $("conn-dot").className = "status-dot" + (hl.bridge?.online ? "" : " off");
+    const pill = (label, cls) => h("span", { class: "pill " + cls }, label);
+    const online = hl.bridge?.online === true, gw = online && hl.bridge.gateway === true;
     executionEnabled = hl.executionEnabled === true;
-    $("task-send").disabled = !executionEnabled;
-
+    // Detalhes técnicos (sob "Ver detalhes da conexão")
+    $("health-pills").replaceChildren(
+      online ? pill("Ponte com a VPS conectada", "ok") : pill("Ponte com a VPS sem sinal", "off"),
+      gw ? pill("OpenClaw da Alice respondendo", "ok") : pill("OpenClaw da Alice não verificado", "off"),
+      executionEnabled ? pill("Execução pela Torre liberada", "ok") : pill("Execução pela Torre aguardando homologação", "off"),
+      hl.mail.configured ? pill("Alertas por e-mail ligados", "ok") : pill("Alertas por e-mail desligados", "warn"));
+    // Uma frase para quem não é técnico
+    let main, sub, dot;
+    if (online && gw && executionEnabled) { main = "A Alice está conectada à Torre."; sub = "Você pode ligar, desligar e executar rotinas por aqui."; dot = ""; }
+    else if (online && gw) { main = "A Alice está conectada, mas a execução pela Torre ainda não foi liberada."; sub = "O liga/desliga e a auditoria já funcionam."; dot = ""; }
+    else if (online) { main = "A ponte está conectada, mas o OpenClaw da Alice não respondeu."; sub = "Se continuar assim, avise o responsável pela VPS."; dot = " bad"; }
+    else { main = "A ponte com a Alice ainda não está conectada."; sub = "Rotinas e auditoria continuam visíveis; a execução pela Torre fica indisponível."; dot = " off"; }
+    if (!hl.mail.configured) sub += " Alertas por e-mail desligados.";
+    $("sit-main").textContent = main; $("sit-sub").textContent = sub;
+    $("conn-dot").className = "status-dot" + dot;
   } catch (e) {
-    executionEnabled = false; $("task-send").disabled = true;
-    $("health-pills").replaceChildren(h("span", {}, "Não consegui verificar as conexões"));
+    executionEnabled = false;
+    $("sit-main").textContent = "Não consegui verificar a conexão com a Alice.";
+    $("sit-sub").textContent = "Tente atualizar a página em alguns minutos.";
+    $("conn-dot").className = "status-dot bad";
   }
+  updateExecGate();
+}
+
+$("conn-toggle").addEventListener("click", (e) => {
+  const open = $("health-pills").hidden;
+  $("health-pills").hidden = !open;
+  e.target.setAttribute("aria-expanded", String(open));
+  e.target.textContent = open ? "Ocultar detalhes" : "Ver detalhes da conexão";
+});
+
+// ------------------------------------------------------------ precisa de atenção
+let tasksCache = [];
+async function focusRoutine(id) {
+  await selectTab("routines");
+  const el = document.getElementById("rt-" + id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("flash"); el.focus({ preventScroll: true });
+  setTimeout(() => el.classList.remove("flash"), 2200);
+}
+function renderAttention() {
+  const items = [];
+  const WEEK = 7 * 864e5;
+  for (const r of routines) {
+    if (r.on && r.lastRun?.status === "error") items.push({ sev: "bad", text: `“${r.name}” falhou${r.lastRun.summary ? ": " + r.lastRun.summary : ""}`, at: r.lastRun.at, go: () => focusRoutine(r.id), label: "Ver rotina" });
+  }
+  for (const t of tasksCache) {
+    if (!["error", "uncertain", "send_failed"].includes(t.status)) continue;
+    if (Date.now() - new Date(t.updatedAt || t.createdAt).getTime() > WEEK) continue;
+    items.push({ sev: t.status === "send_failed" ? "warn" : "bad", text: `Execução de “${t.title.replace(/^Executar(?: agora)?: /, "")}”: ${(TASK_LABEL[t.status]?.[0] || t.status).toLowerCase()}`, at: t.updatedAt || t.createdAt, go: () => openTask(t.id), label: "Ver execução" });
+  }
+  const nPending = Number($("pendingCount").textContent) || 0;
+  if (nPending) items.push({ sev: "warn", text: nPending === 1 ? "1 proposta da Alice esperando aprovação" : `${nPending} propostas da Alice esperando aprovação`, go: async () => { await selectTab("routines"); $("pending-section").scrollIntoView({ behavior: "smooth" }); }, label: "Revisar" });
+  $("attnCount").textContent = String(items.length);
+  $("attention").hidden = !items.length;
+  $("attention").classList.toggle("only-warn", items.every((i) => i.sev === "warn"));
+  $("attentionList").replaceChildren(...items.map((i) => h("li", {},
+    h("span", { class: "what" }, i.text, i.at ? h("span", { class: "when" }, " · " + fmtAgo(i.at)) : null),
+    h("button", { class: "btn small", type: "button", onclick: i.go }, i.label))));
 }
 
 // ------------------------------------------------------------ upload de arquivos
@@ -664,15 +806,37 @@ $("chat-reset").addEventListener("click", async () => {
 });
 
 // ------------------------------------------------------------ tarefas
-const taskFiles = attachments("taskFile", "taskChips");
-const TASK_LABEL = { uncertain: ["resultado incerto — requer conferência", "bad"], skipped: ["não executada", "off"], queued: ["na fila", "off"], sent: ["enviada", "warn"], running: ["em andamento", "warn"], done: ["execução técnica concluída", "ok"], error: ["falhou", "bad"], send_failed: ["não enviada", "bad"] };
+// [rótulo, cor, explicação em linguagem simples]
+const TASK_LABEL = {
+  queued: ["Na fila", "off", "Esperando a ponte da Alice pegar o pedido."],
+  sent: ["Em execução", "warn", "A Alice recebeu o pedido e está rodando a rotina."],
+  running: ["Em execução", "warn", "A Alice está trabalhando nesta rotina."],
+  done: ["Concluída", "ok", "A rotina terminou sem erro técnico. Confira o resultado (planilha, e-mails) onde ele costuma chegar."],
+  error: ["Falhou", "bad", "A rotina terminou com erro. Veja a auditoria ou avise o responsável pela VPS."],
+  uncertain: ["Resultado incerto", "bad", "Não foi possível confirmar se a rotina rodou. Confira antes de pedir de novo, para não repetir envios."],
+  skipped: ["Não executada", "off", "A Alice estava ocupada com outra rotina. Nada foi feito; pode pedir de novo."],
+  send_failed: ["Recusada", "bad", "O pedido foi recusado antes de rodar (rotina desligada ou alterada). Nada foi feito."],
+};
 const taskPill = (s) => h("span", { class: "pill task-status " + (TASK_LABEL[s]?.[1] || "off") }, TASK_LABEL[s]?.[0] || s);
+
+/** Mostra por que o botão Executar está travado, quando estiver. */
+function updateExecGate() {
+  const r = routines.find((x) => x.id === $("taskRoutine").value);
+  let why = "";
+  if (!executionEnabled) why = "A execução pela Torre ainda não foi liberada. Ela será ligada depois da homologação na VPS da Alice.";
+  else if (r && !r.on) why = "Esta rotina está desligada. Ligue-a na aba Rotinas para poder executar.";
+  $("execGate").hidden = !why; $("execGate").textContent = why;
+  $("task-send").disabled = !!why || !r;
+  $("taskPreview").hidden = !r;
+  if (r) $("taskPreview").replaceChildren(
+    h("div", {}, r.description || r.name),
+    h("div", { class: "meta" }, (r.schedule ? "Agenda normal: " + r.schedule : "") + (r.lastRun ? ` · Última execução ${fmtAgo(r.lastRun.at)}` : "")));
+}
+$("taskRoutine").addEventListener("change", updateExecGate);
 
 $("task-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("task-error").textContent = "";
-  if (taskFiles.busy()) return ($("task-error").textContent = "Espere os anexos terminarem de subir.");
-  if (taskFiles.hasErrors()) return ($("task-error").textContent = "Remova os anexos com erro antes de enviar.");
   $("task-send").disabled = true;
   try {
     if (!executionEnabled) throw new Error("Execução ainda não homologada.");
@@ -680,7 +844,7 @@ $("task-form").addEventListener("submit", async (e) => {
     if (!routine?.on) throw new Error("Escolha uma rotina ligada.");
     const pendingKey = "torre_pending_routine_request:" + encodeURIComponent($("whoami").textContent);
     let pending = JSON.parse(localStorage.getItem(pendingKey) || "null");
-    if (pending && (pending.routineId !== routine.id || pending.version !== routine.version)) throw new Error("Há outro pedido sem confirmação. Confira as tarefas antes de solicitar uma nova execução.");
+    if (pending && (pending.routineId !== routine.id || pending.version !== routine.version)) throw new Error("Há outro pedido seu sem confirmação. Confira a lista de execuções antes de pedir uma nova.");
     if (!pending) {
       if (!confirm(`Executar a rotina “${routine.name}”? Ela pode consumir IA e realizar as ações previstas no cadastro.`)) return;
       pending = { requestId: crypto.randomUUID(), routineId: routine.id, version: routine.version };
@@ -688,15 +852,15 @@ $("task-form").addEventListener("submit", async (e) => {
     }
     const out = await api("/api/tasks", { json: pending });
     localStorage.removeItem(pendingKey);
-    if (!out.ok) $("task-error").textContent = "A tarefa foi registrada, mas não chegou na Alice: " + out.error;
-    $("taskTitle").value = ""; $("taskDesc").value = ""; $("taskRoutine").value = ""; taskFiles.clear();
-    await loadTasks();
+    if (!out.ok) $("task-error").textContent = "O pedido foi registrado, mas não chegou na Alice: " + out.error;
+    $("taskRoutine").value = "";
+    await loadTasks(); renderAttention();
     // No modo ponte a tarefa sai de "na fila" para "enviada" em poucos segundos
     if (out.task && out.task.status === "queued") { setTimeout(loadTasks, 3000); setTimeout(loadTasks, 8000); }
   } catch (err) {
     $("task-error").textContent = err.message;
   } finally {
-    $("task-send").disabled = !executionEnabled;
+    updateExecGate();
   }
 });
 $("tasks-refresh").addEventListener("click", loadTasks);
@@ -704,15 +868,15 @@ $("tasks-refresh").addEventListener("click", loadTasks);
 async function loadTasks() {
   try {
     const { tasks } = await api("/api/tasks");
+    tasksCache = tasks;
+    const open = tasks.filter((t) => ["queued", "sent", "running"].includes(t.status)).length;
+    $("tasksBadge").hidden = !open; $("tasksBadge").textContent = open;
     $("taskList").replaceChildren(...(tasks.length ? tasks.map((t) =>
-      h("div", { class: "row" },
-        h("div", { class: "glyph" }, "T"),
-        h("div", {},
-          h("h3", {}, t.title),
-          h("p", { class: "line mono" }, `por ${t.createdBy} · ${fmtDate(t.createdAt)}${t.files ? ` · ${t.files} anexo(s)` : ""}`),
-          h("div", { class: "btns" }, h("button", { class: "btn small", type: "button", onclick: () => openTask(t.id) }, "Ver detalhes"))),
-        h("div", { class: "control" }, taskPill(t.status)))
-    ) : [h("div", { class: "empty" }, "Nenhuma tarefa ainda.")]));
+      h("button", { class: "task-row", type: "button", onclick: () => openTask(t.id), "aria-label": `${t.title}, ${TASK_LABEL[t.status]?.[0] || t.status}. Ver detalhes` },
+        h("span", { class: "t" }, t.title.replace(/^Executar(?: agora)?: /, "")),
+        taskPill(t.status),
+        h("span", { class: "d" }, `Pedido por ${t.createdBy} ${fmtAgo(t.createdAt)} · ${TASK_LABEL[t.status]?.[2] || ""}`))
+    ) : [h("div", { class: "empty" }, "Nenhuma execução pedida pela Torre ainda.")]));
   } catch (e) {
     $("taskList").replaceChildren(h("div", { class: "empty" }, "Não deu pra carregar: " + e.message));
   }
@@ -727,24 +891,23 @@ async function openTask(id) {
     const t = await api("/api/tasks/" + encodeURIComponent(id));
     const result = h("div", { class: "md" }); result.innerHTML = md(t.result || "");
     const parts = [
-      h("div", { class: "sub" }, `${t.id} · por ${t.createdBy} · ${fmtDate(t.createdAt)}`),
+      h("div", { class: "sub" }, `Pedido por ${t.createdBy} em ${fmtDate(t.createdAt)}`),
       taskPill(t.status),
+      h("p", { style: "margin:10px 0 0" }, TASK_LABEL[t.status]?.[2] || ""),
       t.routineName ? h("p", { class: "line" }, "Rotina: " + t.routineName) : null,
-      h("div", { class: "block-label" }, "Pedido"), h("pre", { class: "box" }, t.description),
+      t.description ? [h("div", { class: "block-label" }, "Pedido"), h("pre", { class: "box" }, t.description)] : null,
       t.files?.length ? [h("div", { class: "block-label" }, "Arquivos enviados"), fileLinks(t.files)] : null,
       t.error ? [h("div", { class: "block-label" }, "Erro no envio"), h("pre", { class: "box" }, t.error)] : null,
       t.result ? [h("div", { class: "block-label" }, "Resultado da Alice"), result] : null,
       t.resultFiles?.length ? [h("div", { class: "block-label" }, "Arquivos de resultado"), fileLinks(t.resultFiles)] : null,
       h("div", { class: "block-label" }, "Histórico"),
       h("ul", {}, (t.history || []).map((x) => h("li", { class: "line" }, `${fmtDate(x.at)} — ${TASK_LABEL[x.status]?.[0] || x.status} (${x.by})${x.note ? ": " + x.note : ""}`))),
+      t.evidence?.at && t.evidence.at !== t.history?.[t.history.length - 1]?.at ? h("p", { class: "line" }, `Última atualização da ponte: ${TASK_LABEL[t.status]?.[0] || t.status} em ${fmtDate(t.evidence.at)}`) : null,
     ];
     const actions = h("div", { class: "modal-actions" });
-    if (["send_failed", "error", "sent", "queued"].includes(t.status)) {
-      actions.append(h("button", { class: "btn", type: "button", onclick: async (e) => {
-        e.target.disabled = true;
-        try { const out = await api(`/api/tasks/${encodeURIComponent(t.id)}/resend`, { json: {} }); if (!out.ok) alert("Não foi: " + out.error); closeModal(); loadTasks(); }
-        catch (err) { alert(err.message); e.target.disabled = false; }
-      } }, "Reenviar para a Alice"));
+    // Só oferece pedir de novo quando é seguro (nada rodou). Resultado incerto exige conferência antes.
+    if (["skipped", "send_failed"].includes(t.status) && t.routineId) {
+      actions.append(h("button", { class: "btn", type: "button", onclick: () => { closeModal(); askRun(routines.find((r) => r.id === t.routineId) || { id: t.routineId }); } }, "Pedir de novo"));
     }
     actions.append(closeBtn());
     openModal(t.title, parts, actions);
@@ -754,14 +917,14 @@ async function openTask(id) {
 // ------------------------------------------------------------ rotinas
 let routines = [];
 
-function checksText(checks) {
-  return (checks || []).map((c) => `${c.days.map((d) => DAYS[d]).join(", ")} até ${c.by}`).join(" · ");
-}
-
-function lastRunText(lr) {
-  if (!lr) return "Sem execução reportada ainda";
-  const label = { started: "iniciou", ok: "concluiu", error: "falhou", skipped: "pulou", wait: "aguardando" }[lr.status] || lr.status;
-  return `Última execução: ${label} · ${fmtDate(lr.at)}${lr.summary ? " — " + lr.summary : ""}`;
+// Status reportado pela Alice na última execução: [rótulo, cor]
+const RUN_LABEL = { started: ["Rodando", "warn"], ok: ["Concluiu", "ok"], error: ["Falhou", "bad"], skipped: ["Pulou", "off"], wait: ["Aguardando", "warn"] };
+const DAYS_FULL = ["", "seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+function daysText(days) {
+  const d = [...days].sort();
+  if (d.length === 7) return "todos os dias";
+  if (d.join() === "1,2,3,4,5") return "dias úteis";
+  return d.map((x) => DAYS_FULL[x]).join(", ");
 }
 
 async function loadRoutines() {
@@ -776,37 +939,44 @@ async function loadRoutines() {
 function renderRoutines() {
   $("onCount").textContent = `${routines.filter((r) => r.on).length} de ${routines.length}`;
   const sel = $("taskRoutine"), keep = sel.value;
-  sel.replaceChildren(h("option", { value: "" }, "— escolha uma rotina —"), ...routines.map((r) => h("option", { value: r.id }, r.name)));
+  sel.replaceChildren(h("option", { value: "" }, "Escolha uma rotina"), ...routines.map((r) => h("option", { value: r.id }, r.name + (r.on ? "" : " (desligada)"))));
   sel.value = keep;
+  updateExecGate();
 
   if (!routines.length) {
     $("routineList").replaceChildren(h("div", { class: "empty" }, "Nenhuma rotina cadastrada. Use “Importar JSON” com o arquivo rotinas-seed.json ou “Nova rotina”."));
     return;
   }
-  $("routineList").replaceChildren(...routines.map((r, i) => {
-    const sw = h("button", { class: "switch" + (r.on ? " active" : ""), role: "switch", "aria-checked": String(r.on), "aria-label": "Ligar ou desligar " + r.name });
+  $("routineList").replaceChildren(...routines.map((r) => {
+    const sw = h("button", { class: "switch" + (r.on ? " active" : ""), role: "switch", "aria-checked": String(r.on), "aria-label": (r.on ? "Desligar " : "Ligar ") + r.name });
     sw.addEventListener("click", async () => {
+      if (r.on && !confirm(`Desligar “${r.name}”?\n\nA Alice não vai rodar esta rotina até alguém ligar de novo. Uma execução que já começou não é interrompida.`)) return;
       sw.disabled = true;
       try {
         const out = await api(`/api/routines/${r.id}/state`, { json: { on: !r.on } });
         if (out.bridgeError) alert("Estado salvo, mas o aviso ao webhook falhou: " + out.bridgeError);
-        await loadRoutines();
+        await loadRoutines(); renderAttention();
       } catch (err) { alert("Não deu pra atualizar agora: " + err.message); sw.disabled = false; }
     });
-    const lrBad = r.lastRun && r.lastRun.status === "error";
-    return h("div", { class: "row" },
-      h("div", { class: "glyph" }, "R-" + String(i + 1).padStart(2, "0")),
+    const lr = r.lastRun, run = lr ? RUN_LABEL[lr.status] || [lr.status, "off"] : null;
+    const runBtn = h("button", { class: "btn small", type: "button", onclick: () => askRun(r), disabled: !r.on || null,
+      title: !r.on ? "Ligue a rotina para poder executar" : null }, "Executar agora");
+    return h("article", { class: "rt" + (r.on ? "" : " off"), "aria-label": r.name, id: "rt-" + r.id, tabindex: "-1" },
       h("div", {},
         h("h3", {}, r.name),
-        r.note ? h("p", { class: "line" }, r.note) : null,
-        h("p", { class: "line mono" }, r.schedule),
-        r.checks?.length ? h("p", { class: "line mono" }, "Conferência: " + checksText(r.checks)) : null,
-        h("p", { class: "line", style: lrBad ? "color:var(--danger)" : null }, lastRunText(r.lastRun)),
-        h("div", { class: "btns" },
-          h("button", { class: "btn small navy", type: "button", onclick: () => routineInfo(r) }, "Informações"),
-          h("button", { class: "btn small", type: "button", onclick: () => askRun(r) }, "Pedir execução agora"),
-          h("button", { class: "btn small", type: "button", onclick: () => routineEditor(r) }, "Editar"))),
-      h("div", { class: "control" }, h("span", { class: "state-label " + (r.on ? "on" : "off") }, r.on ? "ligada" : "desligada"), sw));
+        h("div", { class: "meta" },
+          r.schedule ? h("span", {}, h("b", {}, "Quando: "), r.schedule.replace(/\s*\(America\/Sao_Paulo\)/, "")) : null,
+          r.checks?.length ? h("span", {}, h("b", {}, "Prazo: "), r.checks.map((c) => `${daysText(c.days)} até ${c.by}`).join("; ")) : null),
+        r.note ? h("div", { class: "meta" }, r.note) : null),
+      h("div", { class: "control" }, h("span", { class: "state-label " + (r.on ? "on" : "off") }, r.on ? "Ligada" : "Desligada"), sw),
+      h("div", { class: "last" },
+        run ? h("span", { class: "pill " + run[1] }, run[0]) : h("span", { class: "pill off" }, "Sem registro"),
+        h("span", { class: "txt" }, lr ? (lr.summary || "Execução reportada pela Alice") : "A Alice ainda não reportou nenhuma execução desta rotina."),
+        lr ? h("span", { class: "ago" }, fmtAgo(lr.at)) : null),
+      h("div", { class: "btns" },
+        runBtn,
+        h("button", { class: "btn small", type: "button", onclick: () => routineInfo(r) }, "Ver passo a passo"),
+        h("button", { class: "btn small", type: "button", onclick: () => routineEditor(r) }, "Editar")));
   }));
 }
 
@@ -825,14 +995,11 @@ function routineInfo(r) {
     h("div", { class: "modal-actions" }, closeBtn()));
 }
 
-$("taskRoutine").addEventListener("change", () => { const r = routines.find(r => r.id === $("taskRoutine").value); $("taskTitle").value = r?.name || ""; $("taskDesc").value = r?.description || ""; });
-
-function askRun(r) {
-  selectTab("tasks");
+async function askRun(r) {
+  await selectTab("tasks");
   $("taskRoutine").value = r.id;
-  $("taskTitle").value = "Executar agora: " + r.name;
-  $("taskDesc").value = `Execute agora a rotina "${r.name}" (id ${r.id}), seguindo o passo a passo cadastrado na Torre.` + (r.prompt ? "\n\nInstruções da rotina:\n" + r.prompt : "");
-  $("task-send").focus();
+  updateExecGate();
+  (!$("task-send").disabled ? $("task-send") : $("taskRoutine")).focus();
 }
 
 // --- editor de rotina (texto simples para passos e conferências)
@@ -939,17 +1106,19 @@ async function loadPending() {
       if (p.payload.schedule) add("Periodicidade", p.payload.schedule);
       if (p.payload.note) add("Nota", p.payload.note);
       if (p.payload.description) add("Descrição", p.payload.description);
-      if (p.payload.steps) add("Passo a passo", `${p.payload.steps.length} etapa(s)`);
+      if (p.payload.steps?.length) add("Passo a passo", `${p.payload.steps.length} etapa(s)`);
+      if (p.payload.checks?.length) add("Prazo", p.payload.checks.map((c) => `${daysText(c.days)} até ${c.by}`).join("; "));
       if (p.payload.prompt) add("Prompt", p.payload.prompt.slice(0, 300) + (p.payload.prompt.length > 300 ? "…" : ""));
-      if ("defaultOn" in p.payload) add("Estado inicial", p.payload.defaultOn ? "ligada" : "desligada");
+      if ("defaultOn" in p.payload) add("Ao aprovar, fica", p.payload.defaultOn ? "ligada" : "desligada");
       const act = (action) => async (e) => {
         e.target.closest(".pending-item").querySelectorAll("button").forEach((b) => (b.disabled = true));
-        try { await api(`/api/routines/pending/${p.proposalId}/${action}`, { json: {} }); await Promise.all([loadPending(), loadRoutines()]); }
+        if (action === "reject" && !confirm(`Rejeitar a proposta “${title}”? Ela será descartada.`)) { e.target.closest(".pending-item").querySelectorAll("button").forEach((b) => (b.disabled = false)); return; }
+        try { await api(`/api/routines/pending/${p.proposalId}/${action}`, { json: {} }); await Promise.all([loadPending(), loadRoutines()]); renderAttention(); }
         catch (err) { alert(err.message); loadPending(); }
       };
       return h("div", { class: "pending-item" },
         h("div", { class: "actions", style: "align-items:center" }, h("span", { class: "pill warn" }, p.type === "create" ? "Nova rotina" : "Edição"), h("h3", { style: "font-size:.92rem" }, title)),
-        h("div", { class: "line mono" }, `id: ${p.routineId} · proposto pela Alice em ${fmtDate(p.proposedAt)}`),
+        h("div", { class: "line", title: "Identificador: " + p.routineId }, `Proposta da Alice ${fmtAgo(p.proposedAt)}`),
         h("div", { class: "preview" }, fields),
         h("div", { class: "actions", style: "margin-top:12px" },
           h("button", { class: "btn small primary", type: "button", onclick: act("approve") }, "Aprovar"),
@@ -977,19 +1146,57 @@ async function loadAudit(reset) {
   }
 }
 
+let auditFilter = "";
+const ACTOR = { alice: "Alice", ponte: "Ponte da VPS", torre: "Torre (automático)" };
+const AUDIT_FILTERS = {
+  "": () => true,
+  error: (e) => e.severity === "error",
+  warn: (e) => e.severity === "warn",
+  run: (e) => /^(run_|routine_run_|task_)/.test(e.type || ""),
+  change: (e) => /^(routine_(enable|disable|edit|create|delete|import)|approve_|reject_|propose_)/.test(e.type || ""),
+};
+
 function renderAudit() {
-  const f = $("audit-filter").value;
-  const list = auditEvents.filter((e) =>
-    !f ? true : f === "error" ? e.severity === "error" : f === "warn" ? e.severity !== "info" : f === "run" ? (e.type || "").startsWith("run_") : f === "task" ? (e.type || "").startsWith("task_") : true);
-  $("auditList").replaceChildren(...(list.length ? list.map((e) =>
-    h("div", { class: "audit-item" },
-      h("div", { class: "when" }, fmtDate(e.at)),
-      h("div", {}, h("span", { class: "pill " + (SEV[e.severity]?.[1] || "off") }, SEV[e.severity]?.[0] || e.severity)),
-      h("div", {}, e.summary, h("span", { class: "who" }, `${e.actor || ""}${e.type ? " · " + e.type : ""}`)))
-  ) : [h("div", { class: "empty" }, "Nada por aqui ainda.")]));
+  const norm = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const q = $("audit-search").value.trim();
+  // cada palavra buscada precisa começar uma palavra do texto ("ina" acha "INA", não "rotina")
+  const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, (c) => "\\" + c);
+  const terms = norm(q).split(/\s+/).filter(Boolean).map((t) => new RegExp("(^|[^a-z0-9])" + escapeRe(t)));
+  const match = (e) => { const txt = norm(`${e.summary} ${ACTOR[e.actor] || e.actor} ${e.routineName || ""}`); return terms.every((re) => re.test(txt)); };
+  for (const [k, fn] of Object.entries(AUDIT_FILTERS)) {
+    const n = auditEvents.filter((e) => fn(e) && match(e)).length;
+    document.querySelector(`[data-n="${k}"]`).textContent = n;
+  }
+  const filtered = auditEvents.filter((e) => AUDIT_FILTERS[auditFilter](e) && match(e));
+  // Junta eventos informativos idênticos e seguidos (ex.: vários logins) numa linha só
+  const list = [];
+  for (const e of filtered) {
+    const prev = list[list.length - 1];
+    if (prev && e.severity === "info" && prev.severity === "info" && prev.summary === e.summary && dayLabel(prev.at) === dayLabel(e.at)) {
+      prev.times = (prev.times || 1) + 1; prev.firstAt = e.at;
+    } else list.push({ ...e });
+  }
+  const out = [];
+  let lastDay = null;
+  for (const e of list) {
+    const day = dayLabel(e.at);
+    if (day !== lastDay) { out.push(h("div", { class: "day" }, day)); lastDay = day; }
+    out.push(h("div", { class: "audit-item" },
+      h("div", { class: "when" }, fmtTime(e.at)),
+      h("div", { class: "sev" }, e.severity === "info" ? null : h("span", { class: "pill " + (SEV[e.severity]?.[1] || "off") }, (SEV[e.severity]?.[0] || e.severity).replace(/^./, (c) => c.toUpperCase()))),
+      h("div", { style: e.severity === "error" ? "color:var(--danger)" : null }, e.summary,
+        h("span", { class: "who", title: e.type || "" }, "por " + (ACTOR[e.actor] || e.actor || "—") +
+          (e.times ? ` · ${e.times} vezes, das ${fmtTime(e.firstAt)} às ${fmtTime(e.at)}` : "")))));
+  }
+  $("auditList").replaceChildren(...(out.length ? out : [h("div", { class: "empty" }, q ? `Nada encontrado para “${q}”.` : "Nada por aqui ainda.")]));
 }
 
-$("audit-filter").addEventListener("change", renderAudit);
+document.querySelectorAll(".chip-btn[data-f]").forEach((b) => b.addEventListener("click", () => {
+  auditFilter = b.dataset.f;
+  document.querySelectorAll(".chip-btn[data-f]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  renderAudit();
+}));
+$("audit-search").addEventListener("input", renderAudit);
 $("audit-more").addEventListener("click", () => loadAudit(false));
 $("audit-test-email").addEventListener("click", async (e) => {
   e.target.disabled = true;
