@@ -30,22 +30,31 @@ Referências oficiais do OpenClaw: [OpenAI HTTP API](https://docs.openclaw.ai/ga
    nos argumentos dos processos), só baixa links de arquivo da própria Torre para uma pasta temporária controlada
    (nome saneado, 20 MB, tipos permitidos) e só envia arquivos de dentro do workspace (nunca ocultos ou com cara de credencial).
    Leia os dois arquivos antes de habilitar.
-2. Em `~/.openclaw/openclaw.json`, injete as variáveis da skill:
+2. Em `~/.openclaw/openclaw.json`, aponte a chave para um **arquivo privado** (permissão 600), sem copiá-la
+   para a configuração. A skill declara `primaryEnv: TORRE_AGENT_KEY`, então o campo `apiKey` vira essa variável:
    ```json5
    {
+     secrets: {
+       providers: {
+         torre_agent_key: {
+           source: "file",
+           path: "/data/.config/torre-de-controle/ALICE_API_KEY.txt",   // arquivo privado, chmod 600
+           mode: "singleValue",
+         },
+       },
+     },
      skills: {
        entries: {
          "torre-de-controle": {
            enabled: true,
-           env: {
-             TORRE_API_BASE: "https://torre-de-controle-api.alice-fontes.workers.dev",
-             TORRE_AGENT_KEY: "<ALICE_API_KEY — a Renata passa por canal privado>",
-           },
+           apiKey: { source: "file", provider: "torre_agent_key", id: "value" },
+           env: { TORRE_API_BASE: "https://torre-de-controle-api.alice-fontes.workers.dev" },
          },
        },
      },
    }
    ```
+   Depois: `openclaw config validate`, `openclaw skills check` e testes só de leitura (`status` e `rotinas`).
    As variáveis valem para o processo do agente no host; se a Alice roda em sandbox, injete-as no sandbox.
    **Não cole a chave no chat com a Alice** — fica no histórico da conversa.
 3. A Alice precisa conseguir rodar `node` (ferramenta de execução de comandos) com acesso à internet.

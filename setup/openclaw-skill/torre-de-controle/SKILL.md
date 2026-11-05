@@ -1,7 +1,7 @@
 ---
 name: torre-de-controle
 description: Integração da Alice com a Torre de Controle (painel da equipe de Cobrança). Use antes e depois de executar rotinas programadas, ao receber tarefas ou mensagens vindas da Torre, para baixar arquivos enviados pela Torre e para propor rotinas.
-metadata: {"openclaw":{"requires":{"env":["TORRE_API_BASE","TORRE_AGENT_KEY"],"bins":["node"]}}}
+metadata: {"openclaw":{"primaryEnv":"TORRE_AGENT_KEY","requires":{"env":["TORRE_API_BASE","TORRE_AGENT_KEY"],"bins":["node"]}}}
 ---
 
 # Torre de Controle
