@@ -36,6 +36,12 @@
  *   POST /api/agent/tasks/:id               atualiza tarefa { status: running|done|error, result?, files? }
  *   POST /api/agent/files                   envia arquivo de resultado (mesmo formato do /api/files)
  *
+ * Ponte de saída (setup/ponte/ponte-torre.mjs; mesmo X-Agent-Key) — usada quando OPENCLAW_BASE_URL não está definido:
+ *   GET  /api/agent/bridge/next             próximo pedido da fila (204 se vazio); registra que a ponte está viva
+ *   POST /api/agent/bridge/jobs/:id/progress  { text } resposta parcial da conversa
+ *   POST /api/agent/bridge/jobs/:id/done      { text?, error?, runId? }
+ *   (painel) GET /api/chat/jobs/:id         acompanha a resposta da conversa no modo ponte
+ *
  * Segredos: JWT_SECRET, USERS_JSON, ALICE_API_KEY, OPENCLAW_BASE_URL, OPENCLAW_GATEWAY_TOKEN,
  *   OPENCLAW_HOOKS_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, MAIL_WEBHOOK_URL,
  *   MAIL_WEBHOOK_SECRET, AUDIT_EMAIL_TO, ROUTINE_WEBHOOK_URL (opcional). Detalhes em setup/CONFIGURAR.md.
@@ -63,12 +69,13 @@ import {
   listTasks,
 } from "./lib/store.js";
 import { storeUpload, serveSignedFile, resolveFiles, fmtSize } from "./lib/files.js";
-import { openChatStream, collectSseText, submitTask, chatConfigured, hooksConfigured, ping } from "./lib/openclaw.js";
+import { openChatStream, collectSseText, submitTask, chatConfigured, hooksConfigured, ping, bridgeMode } from "./lib/openclaw.js";
 import { scheduled } from "./cron.js";
+import { fila, Fila } from "./lib/fila.js";
+import { applyTaskDelivery, syncQueuedTask } from "./lib/delivery.js";
 import { migrateLegacy } from "./lib/migrate.js";
 
 const RUN_STATUSES = ["started", "ok", "error", "skipped", "wait"];
-const CHAT_HISTORY_MAX = 100;
 
 // ------------------------------------------------------------------ helpers
 
@@ -121,7 +128,7 @@ async function routeUser(request, env, ctx, url, path, method) {
   if (path === "/api/health" && method === "GET") {
     const conn = await ping(env);
     return json({
-      chat: { configured: chatConfigured(env), online: conn.ok, reason: conn.reason || null },
+      chat: { configured: chatConfigured(env), online: conn.ok, reason: conn.reason || null, mode: conn.mode || null },
       tasks: { configured: hooksConfigured(env) },
       mail: { configured: mailConfigured(env) },
       agentKey: { configured: !!env.ALICE_API_KEY },
@@ -299,13 +306,19 @@ async function routeUser(request, env, ctx, url, path, method) {
 
   // ----- conversa
   if (path === "/api/chat" && method === "GET") {
-    return json({ messages: (await env.ROTINAS.get(`chat:${user}`, "json")) || [] });
+    return json({ messages: await fila(env).getHistory(user) });
+  }
+
+  if ((m = path.match(/^\/api\/chat\/jobs\/(j\w+)$/)) && method === "GET") {
+    const job = await fila(env).get(m[1]);
+    if (!job || job.user !== user) throw new HttpError(404, "mensagem não encontrada");
+    return json({ status: job.status, text: job.text || "", error: job.error || null });
   }
 
   if (path === "/api/chat/reset" && method === "POST") {
     const n = Number((await env.ROTINAS.get(`chatsession:${user}`)) || 0) + 1;
     await env.ROTINAS.put(`chatsession:${user}`, String(n));
-    await env.ROTINAS.put(`chat:${user}`, "[]");
+    await fila(env).resetHistory(user);
     await record(env, ctx, { type: "chat_reset", actor: user, summary: "Começou uma conversa nova com a Alice" });
     return json({ ok: true });
   }
@@ -319,18 +332,24 @@ async function routeUser(request, env, ctx, url, path, method) {
     const n = Number((await env.ROTINAS.get(`chatsession:${user}`)) || 0);
     const sessionKey = `torre-${user}-${n}`;
     const content = `[Mensagem de ${user} pela Torre de Controle]\n\n${message}${filesBlock(files)}`;
+    const userMsg = { role: "user", text: message, files: stripUrls(files), at: new Date().toISOString() };
+
+    // Modo ponte: põe na fila; o painel acompanha em /api/chat/jobs/:id
+    if (bridgeMode(env)) {
+      if (!chatConfigured(env)) throw new HttpError(503, "a conversa ainda não foi ligada");
+      const job = await fila(env).enqueue("chat", user, { sessionKey, content, filesCount: files.length });
+      await fila(env).appendHistory(user, [userMsg]);
+      return json({ jobId: job.id }, 202);
+    }
 
     const upstream = await openChatStream(env, sessionKey, content);
-
-    const history = (await env.ROTINAS.get(`chat:${user}`, "json")) || [];
-    history.push({ role: "user", text: message, files: stripUrls(files), at: new Date().toISOString() });
+    await fila(env).appendHistory(user, [userMsg]);
 
     const [toClient, toStore] = upstream.body.tee();
     ctx.waitUntil(
       (async () => {
         const { text, error } = await collectSseText(toStore);
-        history.push({ role: "assistant", text: text || "", error: error || undefined, at: new Date().toISOString() });
-        await env.ROTINAS.put(`chat:${user}`, JSON.stringify(history.slice(-CHAT_HISTORY_MAX)));
+        await fila(env).appendHistory(user, [{ role: "assistant", text: text || "", error: error || undefined, at: new Date().toISOString() }]);
         if (files.length || error) {
           await record(env, null, {
             type: "chat_message",
@@ -350,8 +369,9 @@ async function routeUser(request, env, ctx, url, path, method) {
   if (path === "/api/tasks" && method === "GET") return json({ tasks: await listTasks(env, 50) });
 
   if ((m = path.match(/^\/api\/tasks\/([\w-]+)$/)) && method === "GET") {
-    const task = await getTask(env, m[1]);
+    let task = await getTask(env, m[1]);
     if (!task) throw new HttpError(404, "tarefa não encontrada");
+    task = await syncQueuedTask(env, ctx, task);
     return json({
       ...task,
       files: await withFreshUrls(env, base, task.files),
@@ -390,6 +410,10 @@ async function routeUser(request, env, ctx, url, path, method) {
     const task = await getTask(env, m[1]);
     if (!task) throw new HttpError(404, "tarefa não encontrada");
     if (["done", "running"].includes(task.status)) throw new HttpError(409, "a tarefa já está em andamento ou concluída");
+    if (task.status === "queued" && task.jobId) {
+      const job = await fila(env).get(task.jobId);
+      if (job && ["pending", "taken"].includes(job.status)) throw new HttpError(409, "a tarefa ainda está na fila esperando a ponte");
+    }
     const files = await resolveFiles(env, base, task.files.map((f) => f.id));
     return json(await dispatchTask(env, ctx, task, files, base, user));
   }
@@ -400,6 +424,32 @@ async function routeUser(request, env, ctx, url, path, method) {
 async function dispatchTask(env, ctx, task, files, base, user) {
   let sendError = null;
   task.attempts = (task.attempts || 0) + 1;
+
+  // Modo ponte: a tarefa entra na fila; a ponte confirma (ou não) a entrega em /api/agent/bridge/jobs/:id/done
+  if (bridgeMode(env)) {
+    const job = await fila(env).enqueue("task", user, {
+      taskId: task.id,
+      message: taskMessage(task, files, base),
+      name: `Torre: ${task.title}`.slice(0, 100),
+      idempotencyKey: `${task.id}-${task.attempts}`,
+    });
+    task.jobId = job.id;
+    task.status = "queued";
+    task.error = undefined;
+    task.updatedAt = new Date().toISOString();
+    task.history.push({ at: task.updatedAt, status: "queued", by: user, note: "aguardando a ponte retirar" });
+    await saveTask(env, task);
+    await record(env, ctx, {
+      type: "task_queued",
+      actor: user,
+      taskId: task.id,
+      routineId: task.routineId,
+      routineName: task.routineName,
+      summary: `Pediu à Alice: "${task.title}"${task.files.length ? ` (${task.files.length} arquivo(s))` : ""}`,
+    });
+    return { ok: true, task: { ...task, files }, error: null };
+  }
+
   try {
     const { runId } = await submitTask(env, task, taskMessage(task, files, base));
     task.runId = runId;
@@ -431,12 +481,57 @@ async function dispatchTask(env, ctx, task, files, base, user) {
   return { ok: !sendError, task: { ...task, files }, error: sendError };
 }
 
+
 // ------------------------------------------------------------------ rotas da Alice
 
 async function routeAgent(request, env, ctx, url, path, method) {
   const actor = requireAgent(request, env);
   const base = apiBase(request, env);
   let m;
+
+  // ----- ponte de saída (setup/ponte/ponte-torre.mjs)
+  if (path === "/api/agent/bridge/next" && method === "GET") {
+    const job = await fila(env).next();
+    if (!job) return new Response(null, { status: 204 });
+    return json({ id: job.id, type: job.type, payload: job.payload });
+  }
+
+  if ((m = path.match(/^\/api\/agent\/bridge\/jobs\/(j\w+)\/progress$/)) && method === "POST") {
+    const body = await readJson(request);
+    const job = await fila(env).progress(m[1], body.text);
+    return json({ ok: !!job });
+  }
+
+  if ((m = path.match(/^\/api\/agent\/bridge\/jobs\/(j\w+)\/done$/)) && method === "POST") {
+    const body = await readJson(request);
+    const data = {
+      text: typeof body.text === "string" ? body.text : undefined,
+      error: body.error ? clip(String(body.error), 1000) : undefined,
+      runId: body.runId ? String(body.runId) : undefined,
+    };
+    const job = await fila(env).finish(m[1], data);
+    if (!job) return json({ ok: false, reason: "pedido já encerrado ou inexistente" });
+
+    if (job.type === "chat") {
+      await fila(env).appendHistory(job.user, [
+        { role: "assistant", text: job.text || "", error: job.error || undefined, at: new Date().toISOString() },
+      ]);
+      if (job.error || job.payload?.filesCount) {
+        await record(env, ctx, {
+          type: "chat_message",
+          severity: job.error ? "warn" : "info",
+          actor: job.user,
+          summary: job.error
+            ? `Erro na conversa com a Alice: ${clip(job.error, 200)}`
+            : `Enviou ${job.payload.filesCount} arquivo(s) para a Alice pela conversa`,
+        });
+      }
+    } else if (job.type === "task") {
+      const task = await getTask(env, job.payload.taskId);
+      if (task) await applyTaskDelivery(env, ctx, task, { error: job.error, runId: job.runId }, "ponte");
+    }
+    return json({ ok: true });
+  }
 
   if (path === "/api/agent/routines" && method === "GET") {
     return json({ routines: await listRoutines(env) });
@@ -595,6 +690,8 @@ async function handle(request, env, ctx) {
   if (path.startsWith("/api/")) return routeUser(request, env, ctx, url, path, method);
   throw new HttpError(404, "rota não encontrada");
 }
+
+export { Fila };
 
 export default {
   async fetch(request, env, ctx) {

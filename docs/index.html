@@ -506,7 +506,9 @@ async function loadHealth() {
     const hl = await api("/api/health");
     const pill = (label, cls, title) => h("span", { class: "pill " + cls, title }, label);
     const chat = !hl.chat.configured ? pill("Conversa: não configurada", "off", "Falta configurar o OpenClaw (veja setup/CONFIGURAR.md)")
-      : hl.chat.online ? pill("Conversa: online", "ok") : pill("Conversa: fora do ar", "bad", hl.chat.reason || "");
+      : hl.chat.online ? pill("Conversa: online" + (hl.chat.mode === "ponte" ? " (ponte)" : ""), "ok")
+      : hl.chat.mode === "ponte" && /instalada/.test(hl.chat.reason || "") ? pill("Ponte: aguardando instalação", "off", hl.chat.reason)
+      : pill(hl.chat.mode === "ponte" ? "Ponte: sem sinal" : "Conversa: fora do ar", "bad", hl.chat.reason || "");
     const tasks = hl.tasks.configured ? pill("Tarefas: ligadas", "ok") : pill("Tarefas: não configuradas", "off");
     const mail = hl.mail.configured ? pill("E-mail: ligado", "ok") : pill("E-mail: não configurado", "off");
     $("health-pills").replaceChildren(chat, tasks, mail);
@@ -606,6 +608,21 @@ $("chat-form").addEventListener("submit", async (e) => {
   let full = "", errorMsg = null;
   try {
     const res = await api("/api/chat", { method: "POST", raw: true, json: { message: text, files: ids } });
+    const show = (t) => { if (t && t !== full) { full = t; reply.classList.remove("typing"); reply.innerHTML = md(full); log.scrollTop = log.scrollHeight; } };
+
+    if ((res.headers.get("content-type") || "").includes("application/json")) {
+      // Modo ponte: a mensagem entrou na fila; acompanha até a Alice terminar
+      const { jobId } = await res.json();
+      const started = Date.now();
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const st = await api("/api/chat/jobs/" + encodeURIComponent(jobId));
+        show(st.text);
+        if (st.status === "pending" && Date.now() - started > 8000 && !full) reply.textContent = "Aguardando a Alice pegar a mensagem…";
+        if (st.status === "done") break;
+        if (st.status === "error") { errorMsg = st.error || "erro na conversa"; break; }
+      }
+    } else {
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
     let buf = "";
     for (;;) {
@@ -622,9 +639,10 @@ $("chat-form").addEventListener("submit", async (e) => {
           const obj = JSON.parse(data);
           if (obj.error) errorMsg = obj.error.message || "erro na execução";
           const d = obj.choices?.[0]?.delta?.content;
-          if (typeof d === "string") { full += d; reply.classList.remove("typing"); reply.innerHTML = md(full); log.scrollTop = log.scrollHeight; }
+          if (typeof d === "string") show(full + d);
         } catch (_) {}
       }
+    }
     }
   } catch (err) {
     errorMsg = err.message;
@@ -655,6 +673,8 @@ $("task-form").addEventListener("submit", async (e) => {
     if (!out.ok) $("task-error").textContent = "A tarefa foi registrada, mas não chegou na Alice: " + out.error;
     $("taskTitle").value = ""; $("taskDesc").value = ""; $("taskRoutine").value = ""; taskFiles.clear();
     await loadTasks();
+    // No modo ponte a tarefa sai de "na fila" para "enviada" em poucos segundos
+    if (out.task && out.task.status === "queued") { setTimeout(loadTasks, 3000); setTimeout(loadTasks, 8000); }
   } catch (err) {
     $("task-error").textContent = err.message;
   } finally {
