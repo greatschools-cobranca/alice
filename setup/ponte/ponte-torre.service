@@ -8,7 +8,8 @@ Type=simple
 WorkingDirectory=/opt/ponte-torre
 # O systemd lê o ponte.env (chmod 600, dono root) antes de rebaixar os privilégios
 EnvironmentFile=/opt/ponte-torre/ponte.env
-ExecStart=/usr/bin/node /opt/ponte-torre/ponte-torre.mjs
+# Ajuste para o caminho do node do servidor (veja: command -v node). Ex.: /usr/local/bin/node
+ExecStart=/usr/local/bin/node /opt/ponte-torre/ponte-torre.mjs
 Restart=always
 RestartSec=10
 # Roda com um usuário temporário sem privilégios
