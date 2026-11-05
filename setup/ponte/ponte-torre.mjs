@@ -25,7 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------- configuração ----------
@@ -93,8 +93,8 @@ async function torre(pathname, opts = {}) {
   });
   if (res.status === 204) return null;
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    const err = new Error(`Torre respondeu ${res.status}: ${text.slice(0, 200)}`);
+    await res.body?.cancel().catch(() => {}); // corpo da resposta nunca vai para o log
+    const err = new Error(`Torre respondeu HTTP ${res.status}`);
     err.status = res.status;
     throw err;
   }
@@ -139,9 +139,9 @@ async function handleChat(job) {
       signal: AbortSignal.timeout(cfg.chatTimeoutMs),
     });
     if (!res.ok || !res.body) {
-      const body = await res.text().catch(() => "");
+      await res.body?.cancel().catch(() => {}); // corpo da resposta nunca vai para o log
       const hint = res.status === 409 ? "sessão arquivada no OpenClaw — clique em “Nova conversa”" : `gateway respondeu ${res.status}`;
-      throw new Error(`${hint}${body ? `: ${body.slice(0, 200)}` : ""}`);
+      throw new Error(hint);
     }
     const decoder = new TextDecoder();
     let buf = "";
@@ -191,7 +191,7 @@ async function handleTask(job) {
       signal: AbortSignal.timeout(30000),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok || body.ok === false) throw new Error(`gateway recusou a tarefa (HTTP ${res.status}${body.error ? `: ${body.error}` : ""})`);
+    if (!res.ok || body.ok === false) throw new Error(`gateway recusou a tarefa (HTTP ${res.status})`);
     await finishJob(job.id, { runId: body.runId || null });
     log(`[${job.id}] tarefa entregue à Alice (run ${body.runId || "?"})`);
   } catch (err) {

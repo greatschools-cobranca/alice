@@ -53,8 +53,10 @@ Referências oficiais do OpenClaw: [OpenAI HTTP API](https://docs.openclaw.ai/ga
 Siga **[setup/ponte/README.md](ponte/README.md)**. Resumo:
 
 1. Ligar `gateway.http.endpoints.chatCompletions` e `hooks` no `openclaw.json` (gateway continua só em `localhost`) e reiniciar o gateway uma vez.
-2. Copiar `ponte-torre.mjs` para `/opt/ponte-torre`, preencher `ponte.env` e rodar `--teste`.
-3. Instalar o serviço `ponte-torre` (systemd).
+2. Copiar `ponte-torre.mjs` e `rodar-ponte.sh` para `/opt/ponte-torre`, preencher `ponte.env` e rodar `--teste`
+   com o node do servidor (ex.: `/usr/local/bin/node`).
+3. Deixar rodando pelo **mesmo supervisor que mantém o gateway** (supervisord, pm2, entrypoint do container ou systemd, se ativo).
+4. Fazer os três testes de confirmação e ler a seção **Nível de acesso** do guia da ponte.
 
 A ponte só faz conexões de saída e não consome tokens enquanto não há pedidos.
 Nenhum segredo novo precisa ser cadastrado no GitHub para esse modo.
