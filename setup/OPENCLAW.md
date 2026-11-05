@@ -16,13 +16,20 @@ Referências oficiais do OpenClaw: [OpenAI HTTP API](https://docs.openclaw.ai/ga
 
 ## Etapa 1 — Skill `torre-de-controle`
 
-1. Baixe a skill para o workspace da Alice:
+1. Copie a pasta da skill (do pacote `pacote-alice-torre.zip` ou do repositório) para o workspace da Alice:
    ```bash
-   mkdir -p <workspace da Alice>/skills/torre-de-controle
-   curl -sL -o <workspace da Alice>/skills/torre-de-controle/SKILL.md \
-     https://raw.githubusercontent.com/greatschools-cobranca/alice/main/setup/openclaw-skill/torre-de-controle/SKILL.md
+   D=<workspace da Alice>/skills/torre-de-controle
+   mkdir -p "$D/scripts"
+   R=https://raw.githubusercontent.com/greatschools-cobranca/alice/main/setup/openclaw-skill/torre-de-controle
+   curl -sL -o "$D/SKILL.md" "$R/SKILL.md"
+   curl -sL -o "$D/scripts/torre.mjs" "$R/scripts/torre.mjs"
    ```
    (ou em `~/.openclaw/skills/torre-de-controle/` para valer para todos os agentes)
+
+   A skill traz o auxiliar `scripts/torre.mjs` (Node 18+, sem dependências). Ele lê a chave do ambiente (ela não aparece
+   nos argumentos dos processos), só baixa links de arquivo da própria Torre para uma pasta temporária controlada
+   (nome saneado, 20 MB, tipos permitidos) e só envia arquivos de dentro do workspace (nunca ocultos ou com cara de credencial).
+   Leia os dois arquivos antes de habilitar.
 2. Em `~/.openclaw/openclaw.json`, injete as variáveis da skill:
    ```json5
    {
@@ -41,12 +48,14 @@ Referências oficiais do OpenClaw: [OpenAI HTTP API](https://docs.openclaw.ai/ga
    ```
    As variáveis valem para o processo do agente no host; se a Alice roda em sandbox, injete-as no sandbox.
    **Não cole a chave no chat com a Alice** — fica no histórico da conversa.
-3. A Alice precisa conseguir rodar `curl` (ferramenta de execução de comandos) com acesso à internet.
+3. A Alice precisa conseguir rodar `node` (ferramenta de execução de comandos) com acesso à internet.
 4. No prompt de cada rotina programada (cron do OpenClaw), acrescente no início:
    > Antes de começar, siga a skill torre-de-controle: confira se a rotina `<id>` está ligada e reporte `started`; ao final reporte `ok`, `error`, `wait` ou `skipped`.
 
    Ids atuais: `agenda-cobranca`, `analise-base-cobranca`, `emails-ina-ciclo-2027`.
 5. Teste pedindo à Alice: *"Use a skill torre-de-controle e me diga quais rotinas estão ligadas."*
+   Depois, para cada uma das três rotinas, um reporte de teste com `status` `skipped` e resumo "teste de integração" —
+   devem aparecer na aba **Auditoria** do painel.
 
 ## Etapa 2 — Ponte de saída (Conversa e Tarefas)
 
