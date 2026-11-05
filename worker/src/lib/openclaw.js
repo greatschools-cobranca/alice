@@ -4,12 +4,29 @@
 // Docs: https://docs.openclaw.ai/gateway/openai-http-api e https://docs.openclaw.ai/automation/cron-jobs/webhooks
 import { HttpError } from "./util.js";
 
+import { fila } from "./fila.js";
+
+export const BRIDGE_ONLINE_MS = 30 * 1000;
+
+/**
+ * Modo ponte: sem OPENCLAW_BASE_URL, a Torre não chama o gateway — põe os pedidos numa fila
+ * que a ponte (no servidor da Alice) busca por HTTPS de saída. Requer ALICE_API_KEY.
+ */
+export function bridgeMode(env) {
+  return !env.OPENCLAW_BASE_URL && !!env.ALICE_API_KEY;
+}
+
 export function chatConfigured(env) {
-  return !!(env.OPENCLAW_BASE_URL && env.OPENCLAW_GATEWAY_TOKEN);
+  return bridgeMode(env) || !!(env.OPENCLAW_BASE_URL && env.OPENCLAW_GATEWAY_TOKEN);
 }
 
 export function hooksConfigured(env) {
-  return !!(env.OPENCLAW_BASE_URL && env.OPENCLAW_HOOKS_TOKEN);
+  return bridgeMode(env) || !!(env.OPENCLAW_BASE_URL && env.OPENCLAW_HOOKS_TOKEN);
+}
+
+export async function bridgeStatus(env) {
+  const { lastSeen } = await fila(env).status();
+  return { lastSeen, online: !!lastSeen && Date.now() - lastSeen < BRIDGE_ONLINE_MS };
 }
 
 function base(env) {
@@ -118,11 +135,20 @@ export async function submitTask(env, task, message) {
 /** Teste de conexão (lista os agentes); usado pelo painel para mostrar se a ponte está de pé. */
 export async function ping(env) {
   if (!chatConfigured(env)) return { ok: false, reason: "não configurado" };
+  if (bridgeMode(env)) {
+    const st = await bridgeStatus(env);
+    if (st.online) return { ok: true, mode: "ponte" };
+    return {
+      ok: false,
+      mode: "ponte",
+      reason: st.lastSeen ? `ponte sem sinal desde ${new Date(st.lastSeen).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : "a ponte ainda não foi instalada no servidor da Alice",
+    };
+  }
   try {
     const res = await fetch(`${base(env)}/v1/models`, {
       headers: { authorization: `Bearer ${env.OPENCLAW_GATEWAY_TOKEN}`, ...accessHeaders(env) },
     });
-    return res.ok ? { ok: true } : { ok: false, reason: `HTTP ${res.status}` };
+    return res.ok ? { ok: true, mode: "direto" } : { ok: false, mode: "direto", reason: `HTTP ${res.status}` };
   } catch (err) {
     return { ok: false, reason: String(err).slice(0, 120) };
   }

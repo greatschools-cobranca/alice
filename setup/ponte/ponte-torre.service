@@ -1,0 +1,23 @@
+[Unit]
+Description=Ponte de saída Torre de Controle -> Alice (OpenClaw)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ponte-torre
+# O systemd lê o ponte.env (chmod 600, dono root) antes de rebaixar os privilégios
+EnvironmentFile=/opt/ponte-torre/ponte.env
+ExecStart=/usr/bin/node /opt/ponte-torre/ponte-torre.mjs
+Restart=always
+RestartSec=10
+# Roda com um usuário temporário sem privilégios
+DynamicUser=yes
+ReadOnlyPaths=/opt/ponte-torre
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

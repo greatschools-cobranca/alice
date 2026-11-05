@@ -4,11 +4,43 @@
 //  3. Depois das 18:30 (São Paulo), uma vez por dia → e-mail com o resumo das últimas 24h.
 import { spNow, spDate } from "./lib/util.js";
 import { record, listAudit } from "./lib/audit.js";
-import { listRoutines, listTasks } from "./lib/store.js";
+import { listRoutines, listTasks } from "./lib/store.js"; // tarefas ficam no Durable Object
 import { sendMail, digestEmail, mailConfigured } from "./lib/mail.js";
 import { migrateLegacy } from "./lib/migrate.js";
+import { getTask } from "./lib/store.js";
+import { syncQueuedTask } from "./lib/delivery.js";
+import { bridgeMode, bridgeStatus } from "./lib/openclaw.js";
 
 const DIGEST_AFTER = "18:30";
+const BRIDGE_OFFLINE_ALERT_MS = 10 * 60 * 1000;
+
+/** Modo ponte: avisa uma vez quando a ponte para de dar sinal (só depois de ter funcionado ao menos uma vez). */
+async function checkBridge(env, ctx) {
+  if (!bridgeMode(env)) return;
+  const { lastSeen } = await bridgeStatus(env);
+  if (!lastSeen || Date.now() - lastSeen < BRIDGE_OFFLINE_ALERT_MS) return;
+  if (!(await once(env, `alerted:bridge:${lastSeen}`, 60 * 60 * 24 * 30))) return;
+  await record(
+    env,
+    ctx,
+    {
+      type: "bridge_offline",
+      severity: "error",
+      actor: "torre",
+      summary: `A ponte da Alice parou de responder (último sinal: ${new Date(lastSeen).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}). Conversa e tarefas pela Torre estão paradas.`,
+    },
+    { alert: true }
+  );
+}
+
+/** Tarefas que venceram na fila (ponte parada) passam a "não entregue", com alerta. */
+async function syncQueued(env, ctx) {
+  for (const t of await listTasks(env, 100)) {
+    if (t.status !== "queued") continue;
+    const task = await getTask(env, t.id);
+    if (task) await syncQueuedTask(env, ctx, task);
+  }
+}
 const STALE_TASK_MS = 3 * 60 * 60 * 1000;
 
 async function once(env, key, ttlSeconds) {
@@ -87,6 +119,8 @@ export async function scheduled(event, env, ctx) {
   await migrateLegacy(env);
   const now = spNow(new Date(event.scheduledTime || Date.now()));
   await checkOverdue(env, ctx, now);
+  await checkBridge(env, ctx);
+  await syncQueued(env, ctx);
   await checkStaleTasks(env, ctx);
   await sendDigest(env, ctx, now);
 }

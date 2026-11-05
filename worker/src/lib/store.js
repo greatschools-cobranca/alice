@@ -1,6 +1,7 @@
 // Acesso ao KV: rotinas (definições ficam só no KV, não no código), estado liga/desliga,
 // propostas da Alice, últimas execuções e tarefas.
 import { HttpError, isValidSlug, invTs, randomHex, clip } from "./util.js";
+import { fila } from "./fila.js";
 
 // ---------- validação de rotina ----------
 
@@ -116,39 +117,24 @@ export function newProposalId() {
 }
 
 // ---------- tarefas ----------
-// Chave: task:<id>, com id = t<timestamp invertido>-<aleatório> (lista sai do mais novo pro mais antigo).
+// Ficam no Durable Object (consistência imediata entre o painel e a ponte/Alice).
+// id = t<timestamp invertido>-<aleatório> (lista sai do mais novo pro mais antigo).
 
-const TASK_TTL_SECONDS = 60 * 60 * 24 * 180;
 export const TASK_STATUSES = ["queued", "sent", "running", "done", "error", "send_failed"];
 
 export function newTaskId() {
   return `t${invTs()}-${randomHex(3)}`;
 }
 
-function taskMeta(t) {
-  return {
-    title: clip(t.title, 120),
-    status: t.status,
-    createdBy: t.createdBy,
-    createdAt: t.createdAt,
-    updatedAt: t.updatedAt,
-    files: (t.files || []).length,
-  };
-}
-
 export async function saveTask(env, task) {
-  await env.ROTINAS.put(`task:${task.id}`, JSON.stringify(task), {
-    metadata: taskMeta(task),
-    expirationTtl: TASK_TTL_SECONDS,
-  });
+  await fila(env).saveTask(task);
 }
 
 export async function getTask(env, id) {
   if (!/^t\d{13}-[0-9a-f]{6}$/.test(id)) return null;
-  return env.ROTINAS.get(`task:${id}`, "json");
+  return fila(env).getTask(id);
 }
 
 export async function listTasks(env, limit = 50) {
-  const page = await env.ROTINAS.list({ prefix: "task:", limit });
-  return page.keys.map((k) => ({ id: k.name.slice(5), ...(k.metadata || {}) }));
+  return fila(env).listTasks(limit);
 }

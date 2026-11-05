@@ -22,6 +22,7 @@ worker/gen-hash.js                 gera hash de senha para o USERS_JSON
 setup/CONFIGURAR.md                passo a passo para colocar no ar
 setup/OPENCLAW.md                  guia para quem mantém a Alice (endpoints, túnel, skill)
 setup/openclaw-skill/              skill que ensina a Alice a falar com a Torre
+setup/ponte/                       ponte de saída: liga Conversa/Tarefas sem expor o servidor da Alice
 setup/apps-script/Code.gs          envio de e-mail pelo Gmail da Alice
 ```
 

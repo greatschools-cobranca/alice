@@ -45,12 +45,16 @@ Os horários-limite de cada rotina ficam no campo *Conferência de execução* (
 
 ## 4. Conversa e tarefas (precisa de quem mantém o OpenClaw)
 
-Envie o arquivo [`setup/OPENCLAW.md`](OPENCLAW.md) para a pessoa que mantém a Alice, junto com o valor do secret
-`ALICE_API_KEY` (se ainda não existir, crie um com 40+ caracteres aleatórios e cadastre como GitHub Secret).
-Ela devolve os valores para cadastrar como secrets (`OPENCLAW_BASE_URL`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_HOOKS_TOKEN`
-e, se usar Cloudflare Access, `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET`). Rode o workflow de novo.
+Envie o [`setup/OPENCLAW.md`](OPENCLAW.md) para quem mantém a Alice e passe o valor da `ALICE_API_KEY` por canal privado.
+São duas etapas do lado dela:
 
-O topo do painel mostra o que já está ligado: **Conversa**, **Tarefas** e **E-mail**.
+1. **Skill** — sem mexer em rede nem reiniciar nada. Libera liga/desliga de verdade e a auditoria das rotinas.
+2. **Ponte de saída** ([`setup/ponte/README.md`](ponte/README.md)) — um programa leve no servidor da Alice que busca
+   as mensagens e tarefas na Torre. Sem túnel, domínio ou VPN; reinicia o gateway uma vez.
+
+**Nada precisa ser cadastrado no GitHub para a ponte.** (Não cadastre `OPENCLAW_BASE_URL`: ele troca a Torre para o modo direto, que exige túnel.)
+
+O topo do painel mostra o que já está ligado: **Conversa** ("Ponte: aguardando instalação" → "Conversa: online (ponte)"), **Tarefas** e **E-mail**.
 
 ## Lista completa de GitHub Secrets
 
@@ -61,8 +65,8 @@ O topo do painel mostra o que já está ligado: **Conversa**, **Tarefas** e **E-
 | `USERS_JSON` | sim | já existe; senhas antigas continuam valendo e são reforçadas sozinhas no próximo login |
 | `ALICE_API_KEY` | sim | chave que a Alice usa para falar com a Torre |
 | `MAIL_WEBHOOK_URL`, `MAIL_WEBHOOK_SECRET`, `AUDIT_EMAIL_TO` | para e-mail | passo 3 |
-| `OPENCLAW_BASE_URL`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_HOOKS_TOKEN` | para conversa/tarefas | passo 4 |
-| `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | se usar Cloudflare Access | passo 4 |
+| `OPENCLAW_BASE_URL`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_HOOKS_TOKEN` | **não** (só no modo direto com túnel) | sem eles a Torre usa a ponte |
+| `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | não | só modo direto com Cloudflare Access |
 | `ROUTINE_WEBHOOK_URL` | opcional | webhook antigo de liga/desliga |
 
 Para cadastrar usuário novo: `node worker/gen-hash.js "senha"` e adicione `{ "username": "...", "passwordHash": "<saída>" }` ao `USERS_JSON`.

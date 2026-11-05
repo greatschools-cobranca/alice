@@ -6,6 +6,15 @@ kv_namespaces = [
   { binding = "ROTINAS", id = "fb216a84c6eb46f7ac4d6fca964f4705" }
 ]
 
+# Fila da ponte de saída, histórico da conversa e tarefas (Durable Object com SQLite — disponível no plano gratuito).
+[[durable_objects.bindings]]
+name = "FILA"
+class_name = "Fila"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Fila"]
+
 # A cada 30 min: confere rotinas atrasadas, tarefas paradas e manda o resumo diário (após 18:30 de SP).
 [triggers]
 crons = ["*/30 * * * *"]
@@ -17,7 +26,7 @@ OPENCLAW_AGENT_ID = "main"
 
 # Segredos (não vão neste arquivo — viram GitHub Secrets e o workflow publica; veja setup/CONFIGURAR.md):
 #   JWT_SECRET, USERS_JSON, ALICE_API_KEY
-#   OPENCLAW_BASE_URL, OPENCLAW_GATEWAY_TOKEN, OPENCLAW_HOOKS_TOKEN
+#   OPENCLAW_BASE_URL, OPENCLAW_GATEWAY_TOKEN, OPENCLAW_HOOKS_TOKEN  (só no modo direto; sem eles a Torre usa a ponte de saída)
 #   CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET   (se o gateway estiver atrás do Cloudflare Access)
 #   MAIL_WEBHOOK_URL, MAIL_WEBHOOK_SECRET, AUDIT_EMAIL_TO
 #   ROUTINE_WEBHOOK_URL  (opcional)
