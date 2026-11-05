@@ -5,7 +5,7 @@ Guia para quem mantém o OpenClaw onde a Alice roda. Duas etapas independentes �
 | Etapa | O que libera | Mexe em rede? | Reinicia o gateway? |
 |---|---|---|---|
 | **1. Skill `torre-de-controle`** | Alice respeita o liga/desliga, reporta execuções (auditoria e alertas), propõe rotinas | não | não |
-| **2. Ponte de saída** | Aba **Conversa** e aba **Tarefas** do painel | não (só conexões de saída) | sim, uma vez |
+| **2. Ponte de saída (protocolo 2)** | Botão "executar rotina cadastrada" do painel e liga/desliga aplicado sem IA nas agendas | não (só conexões de saída) | só se a recarga nativa não bastar — avisar antes |
 
 Endereços: painel https://greatschools-cobranca.github.io/alice/ · API `https://torre-de-controle-api.alice-fontes.workers.dev`
 Repositório: https://github.com/greatschools-cobranca/alice
@@ -57,33 +57,20 @@ Referências oficiais do OpenClaw: [OpenAI HTTP API](https://docs.openclaw.ai/ga
    Depois, para cada uma das três rotinas, um reporte de teste com `status` `skipped` e resumo "teste de integração" —
    devem aparecer na aba **Auditoria** do painel.
 
-## Etapa 2 — Ponte de saída (Conversa e Tarefas)
+## Etapa 2 — Ponte de saída, protocolo 2 (execução de rotinas cadastradas)
 
-Siga **[setup/ponte/README.md](ponte/README.md)**. Resumo:
+Siga **[setup/ponte/README.md](ponte/README.md)** — procedimento do operador da VPS. Resumo:
 
-1. Ligar `gateway.http.endpoints.chatCompletions` e `hooks` no `openclaw.json` (gateway continua só em `localhost`) e reiniciar o gateway uma vez.
-2. Copiar `ponte-torre.mjs` e `rodar-ponte.sh` para `/opt/ponte-torre`, preencher `ponte.env` e rodar `--teste`
-   com o node do servidor (ex.: `/usr/local/bin/node`).
-3. Deixar rodando pelo **mesmo supervisor que mantém o gateway** (supervisord, pm2, entrypoint do container ou systemd, se ativo).
-4. Fazer os três testes de confirmação e ler a seção **Nível de acesso** do guia da ponte.
+- A ponte roda num container separado (`alice-torre-bridge`), só com HTTPS de saída para a Torre e a conexão interna
+  já existente do gateway. **Não** liga `chatCompletions` nem hooks HTTP, não abre porta e não usa túnel, domínio ou VPN.
+- Usa a chave própria `BRIDGE_API_KEY` (diferente da `ALICE_API_KEY` da skill). O token do gateway fica só na VPS.
+- Só dispara rotinas cadastradas e mapeadas para jobs nativos do OpenClaw. Sem conversa livre, anexos ou instruções vindas do painel.
+- O liga/desliga é aplicado sem IA por um gatilho nativo em cada agenda, que consulta `/api/routines/gate` antes de rodar.
+- Começa em modo **observação** (não executa nada). A execução só é liberada depois da homologação das agendas na VPS
+  (`mode=active` na ponte e `ROUTINE_EXECUTION_ENABLED=true` no Worker).
 
-A ponte só faz conexões de saída e não consome tokens enquanto não há pedidos.
-Nenhum segredo novo precisa ser cadastrado no GitHub para esse modo.
+## Escopo desta etapa
 
----
-
-## Alternativa — modo direto (túnel)
-
-Só se, no futuro, preferirem que a Torre acesse o gateway diretamente (resposta da conversa letra por letra, sem os 2–3 s da ponte).
-Exige expor o gateway por **Cloudflare Tunnel + Cloudflare Access** (precisa de domínio na Cloudflare) ou **Tailscale Funnel**
-(`openclaw gateway --tailscale funnel --auth password`). Depois cadastre no GitHub os secrets `OPENCLAW_BASE_URL`,
-`OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_HOOKS_TOKEN` e, com Cloudflare Access, `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET`.
-
-> Atenção: **cadastrar `OPENCLAW_BASE_URL` troca a Torre para o modo direto** e a ponte deixa de ser usada.
-> Sem esse secret, a Torre fica no modo ponte.
-
-## Limitações conhecidas
-
-- A conversa do painel usa uma sessão própria por pessoa (`torre-<usuário>-<n>`); a Alice não vê o histórico do Telegram ali, e vice-versa.
-- Mensagens que a ponte não retirar em 90 s aparecem como erro no painel ("a ponte da Alice não respondeu"); tarefas esperam até 30 min.
-- Se uma sessão for arquivada no Control UI, o painel mostra erro — basta clicar em "Nova conversa".
+- Conversa com a Alice pelo painel: **desligada**.
+- Tarefas com texto livre ou anexos: **desligadas**. O painel só pede a execução de uma rotina cadastrada, na versão revisada.
+- Próxima etapa prevista: rotinas que recebem arquivos de entrada declarados no cadastro (sem texto livre).

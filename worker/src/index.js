@@ -32,6 +32,7 @@ import { scheduled } from "./cron.js";
 import { fila, Fila } from "./lib/fila.js";
 import { syncQueuedTask } from "./lib/delivery.js";
 import { routeBridge, controlSnapshot } from "./lib/bridge-api.js";
+import { auditRequest } from "./lib/bridge-audit.js";
 import { routineVersion, BridgeError, bridgeValue } from "./lib/bridge-state.js";
 import { migrateLegacy } from "./lib/migrate.js";
 
@@ -290,6 +291,7 @@ async function routeUser(request, env, ctx, url, path, method) {
     const now = new Date().toISOString();
     const task = { id: newTaskId(), title: `Executar: ${routine.name}`, routineId: routine.id, routineName: routine.name, files: [], status: "queued", createdBy: user, createdAt: now, updatedAt: now, history: [{ at: now, status: "queued", by: user }] };
     const job = bridgeValue(await fila(env).enqueueRoutine(user, body.requestId, routine.id, body.version, task));
+    if (!job.duplicate) await auditRequest(env, ctx, user, task);
     return json({ ok: true, task: await getTask(env, job.taskId), duplicate: !!job.duplicate }, job.duplicate ? 200 : 201);
   }
 
@@ -469,7 +471,7 @@ async function handle(request, env, ctx) {
     return serveSignedFile(env, m[1], url);
   }
 
-  if (path.startsWith("/api/bridge/v2/")) return routeBridge(request, env, path, method);
+  if (path.startsWith("/api/bridge/v2/")) return routeBridge(request, env, path, method, ctx);
   if (path.startsWith("/api/agent/")) return routeAgent(request, env, ctx, url, path, method);
   if (path.startsWith("/api/")) return routeUser(request, env, ctx, url, path, method);
   throw new HttpError(404, "rota não encontrada");

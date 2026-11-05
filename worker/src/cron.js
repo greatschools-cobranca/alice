@@ -10,6 +10,7 @@ import { migrateLegacy } from "./lib/migrate.js";
 import { getTask } from "./lib/store.js";
 import { syncQueuedTask } from "./lib/delivery.js";
 import { bridgeMode, bridgeStatus } from "./lib/openclaw.js";
+import { alertTaskStates } from "./lib/bridge-audit.js";
 
 const DIGEST_AFTER = "18:30";
 const BRIDGE_OFFLINE_ALERT_MS = 10 * 60 * 1000;
@@ -122,5 +123,6 @@ export async function scheduled(event, env, ctx) {
   await checkBridge(env, ctx);
   await syncQueued(env, ctx);
   await checkStaleTasks(env, ctx);
+  await alertTaskStates(env, ctx, await listTasks(env, 100));
   await sendDigest(env, ctx, now);
 }

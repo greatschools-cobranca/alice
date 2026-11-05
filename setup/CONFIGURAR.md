@@ -43,18 +43,20 @@ O que chega por e-mail:
 Os horários-limite de cada rotina ficam no campo *Conferência de execução* (Editar rotina). No arquivo importado:
 `agenda-cobranca` até 09:00 todos os dias; `emails-ina-ciclo-2027` até 17:30 às terças e quintas; `analise-base-cobranca` é sob demanda (sem conferência).
 
-## 4. Conversa e tarefas (precisa de quem mantém o OpenClaw)
+## 4. Ligação com a Alice (feita por quem opera a VPS)
 
-Envie o [`setup/OPENCLAW.md`](OPENCLAW.md) para quem mantém a Alice e passe o valor da `ALICE_API_KEY` por canal privado.
-São duas etapas do lado dela:
+Envie o [`setup/OPENCLAW.md`](OPENCLAW.md) para quem opera a Alice. São duas etapas do lado dela:
 
-1. **Skill** — sem mexer em rede nem reiniciar nada. Libera liga/desliga de verdade e a auditoria das rotinas.
-2. **Ponte de saída** ([`setup/ponte/README.md`](ponte/README.md)) — um programa leve no servidor da Alice que busca
-   as mensagens e tarefas na Torre. Sem túnel, domínio ou VPN; reinicia o gateway uma vez.
+1. **Skill** — usa a `ALICE_API_KEY` (passe por canal privado). Libera a auditoria das execuções e as propostas de rotina.
+2. **Ponte de saída, protocolo 2** ([`setup/ponte/README.md`](ponte/README.md)) — container separado na VPS, só com HTTPS de saída.
+   Usa a chave própria `BRIDGE_API_KEY`, que precisa ser cadastrada como GitHub Secret (o operador gera o valor e entrega
+   por canal protegido). A execução fica desligada (`ROUTINE_EXECUTION_ENABLED = "false"` no `worker/wrangler.toml`)
+   até a homologação das agendas na VPS.
 
-**Nada precisa ser cadastrado no GitHub para a ponte.** (Não cadastre `OPENCLAW_BASE_URL`: ele troca a Torre para o modo direto, que exige túnel.)
+Nesta etapa a **conversa** e as **tarefas livres com anexos** ficam desligadas: o painel só pede a execução de rotinas cadastradas.
 
-O topo do painel mostra o que já está ligado: **Conversa** ("Ponte: aguardando instalação" → "Conversa: online (ponte)"), **Tarefas** e **E-mail**.
+O topo do painel mostra: **Ponte** (aguardando conexão → conectada), **Gateway** (verificado ou não),
+**Rotinas** (aguardando homologação → liberadas) e **E-mail**.
 
 ## Lista completa de GitHub Secrets
 
@@ -63,10 +65,10 @@ O topo do painel mostra o que já está ligado: **Conversa** ("Ponte: aguardando
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | sim | já existem |
 | `JWT_SECRET` | sim | já existe; mínimo 16 caracteres |
 | `USERS_JSON` | sim | já existe; senhas antigas continuam valendo e são reforçadas sozinhas no próximo login |
-| `ALICE_API_KEY` | sim | chave que a Alice usa para falar com a Torre |
+| `ALICE_API_KEY` | sim | chave que a Alice usa na skill (auditoria e propostas) |
+| `BRIDGE_API_KEY` | para a ponte | chave exclusiva da ponte de saída; gerada pelo operador da VPS e entregue por canal protegido |
 | `MAIL_WEBHOOK_URL`, `MAIL_WEBHOOK_SECRET`, `AUDIT_EMAIL_TO` | para e-mail | passo 3 |
-| `OPENCLAW_BASE_URL`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_HOOKS_TOKEN` | **não** (só no modo direto com túnel) | sem eles a Torre usa a ponte |
-| `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | não | só modo direto com Cloudflare Access |
+| `OPENCLAW_*`, `CF_ACCESS_*` | **não** | sem uso desde o protocolo 2 (o token do gateway fica só na VPS) |
 | `ROUTINE_WEBHOOK_URL` | opcional | webhook antigo de liga/desliga |
 
 Para cadastrar usuário novo: `node worker/gen-hash.js "senha"` e adicione `{ "username": "...", "passwordHash": "<saída>" }` ao `USERS_JSON`.
