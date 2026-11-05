@@ -17,6 +17,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Test bridge and API with fixtures
+        working-directory: .
+        run: node --test tests/*.test.mjs
+
+      - name: Test native gate with fixtures
+        working-directory: .
+        run: python3 -m unittest discover -s tests -p "*_test.py"
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
@@ -32,6 +44,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           S_JWT_SECRET: ${{ secrets.JWT_SECRET }}
           S_USERS_JSON: ${{ secrets.USERS_JSON }}
+          S_BRIDGE_API_KEY: ${{ secrets.BRIDGE_API_KEY }}
           S_ALICE_API_KEY: ${{ secrets.ALICE_API_KEY }}
           S_ROUTINE_WEBHOOK_URL: ${{ secrets.ROUTINE_WEBHOOK_URL }}
           S_OPENCLAW_BASE_URL: ${{ secrets.OPENCLAW_BASE_URL }}
@@ -43,7 +56,7 @@ jobs:
           S_MAIL_WEBHOOK_SECRET: ${{ secrets.MAIL_WEBHOOK_SECRET }}
           S_AUDIT_EMAIL_TO: ${{ secrets.AUDIT_EMAIL_TO }}
         run: |
-          for name in JWT_SECRET USERS_JSON ALICE_API_KEY ROUTINE_WEBHOOK_URL \
+          for name in JWT_SECRET USERS_JSON ALICE_API_KEY BRIDGE_API_KEY ROUTINE_WEBHOOK_URL \
                       OPENCLAW_BASE_URL OPENCLAW_GATEWAY_TOKEN OPENCLAW_HOOKS_TOKEN \
                       CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET \
                       MAIL_WEBHOOK_URL MAIL_WEBHOOK_SECRET AUDIT_EMAIL_TO; do

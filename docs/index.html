@@ -236,13 +236,13 @@
       <div class="chat-log" id="chatLog" aria-live="polite"><div class="empty">Carregando conversa…</div></div>
       <form class="composer" id="chat-form">
         <div class="chips" id="chatChips"></div>
-        <textarea id="chatInput" placeholder="Escreva para a Alice… (Enter envia, Shift+Enter quebra linha)" aria-label="Mensagem para a Alice"></textarea>
+        <textarea id="chatInput" disabled placeholder="Escreva para a Alice… (Enter envia, Shift+Enter quebra linha)" aria-label="Mensagem para a Alice"></textarea>
         <div class="bar">
           <div class="actions">
-            <label class="btn small" style="margin:0">📎 Anexar<input type="file" id="chatFile" multiple hidden></label>
+            <label class="btn small" style="margin:0">📎 Anexar<input type="file" id="chatFile" multiple hidden disabled></label>
             <button type="button" class="btn small" id="chat-reset">Nova conversa</button>
           </div>
-          <button type="submit" class="btn primary" id="chat-send">Enviar</button>
+          <button type="submit" class="btn primary" id="chat-send" disabled>Conversa indisponível nesta etapa</button>
         </div>
       </form>
     </div>
@@ -257,22 +257,22 @@
         <div class="grid2">
           <div>
             <label for="taskTitle">Título</label>
-            <input type="text" id="taskTitle" maxlength="150" required placeholder="Ex.: Análise da base de cobrança de hoje">
+            <input type="text" id="taskTitle" maxlength="150" readonly placeholder="Ex.: Análise da base de cobrança de hoje">
           </div>
           <div>
-            <label for="taskRoutine">Rotina relacionada (opcional)</label>
-            <select id="taskRoutine"><option value="">— nenhuma —</option></select>
+            <label for="taskRoutine">Rotina cadastrada (obrigatória)</label>
+            <select id="taskRoutine" required><option value="">— nenhuma —</option></select>
           </div>
         </div>
         <label for="taskDesc">O que a Alice deve fazer</label>
-        <textarea id="taskDesc" rows="7" maxlength="10000" required placeholder="Descreva a atividade, o resultado esperado e para quem enviar, se for o caso."></textarea>
+        <textarea id="taskDesc" rows="7" maxlength="10000" readonly placeholder="Descreva a atividade, o resultado esperado e para quem enviar, se for o caso."></textarea>
         <div class="chips" id="taskChips" style="margin-bottom:12px"></div>
         <div class="error-msg" id="task-error" role="alert"></div>
         <div class="actions" style="justify-content:space-between">
-          <label class="btn" style="margin:0">📎 Anexar arquivos<input type="file" id="taskFile" multiple hidden></label>
+          <label class="btn" style="margin:0">Anexos indisponíveis<input type="file" id="taskFile" multiple hidden disabled></label>
           <button type="submit" class="btn primary" id="task-send">Enviar para a Alice</button>
         </div>
-        <p class="hint" style="margin:10px 0 0">Até 10 arquivos de 20 MB. Os arquivos ficam guardados por 7 dias.</p>
+        <p class="hint" style="margin:10px 0 0">Nesta etapa só é possível solicitar uma rotina cadastrada, sem anexos ou instruções livres. Edições da rotina precisam de validação na VPS antes da execução.</p>
       </form>
     </div>
     <div class="section">
@@ -285,7 +285,7 @@
   <!-- ----- Rotinas ----- -->
   <section id="tab-routines" role="tabpanel" hidden>
     <div class="section-head">
-      <div><h2>Rotinas programadas</h2><p>Ligar/desligar fica registrado na auditoria. A Alice consulta este estado antes de rodar cada rotina.</p></div>
+      <div><h2>Rotinas programadas</h2><p>Ligar/desligar fica registrado na auditoria. A integração precisa estar homologada na VPS para o estado ser aplicado à agenda. Rotinas já em execução não são interrompidas.</p></div>
       <div class="actions">
         <button class="btn small" id="routine-new">Nova rotina</button>
         <label class="btn small" style="margin:0">Importar JSON<input type="file" id="routine-import" accept="application/json,.json" hidden></label>
@@ -501,19 +501,22 @@ function startPolling() {
 function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
 
 // ------------------------------------------------------------ saúde das conexões
+let executionEnabled = false;
 async function loadHealth() {
   try {
     const hl = await api("/api/health");
     const pill = (label, cls, title) => h("span", { class: "pill " + cls, title }, label);
-    const chat = !hl.chat.configured ? pill("Conversa: não configurada", "off", "Falta configurar o OpenClaw (veja setup/CONFIGURAR.md)")
-      : hl.chat.online ? pill("Conversa: online" + (hl.chat.mode === "ponte" ? " (ponte)" : ""), "ok")
-      : hl.chat.mode === "ponte" && /instalada/.test(hl.chat.reason || "") ? pill("Ponte: aguardando instalação", "off", hl.chat.reason)
-      : pill(hl.chat.mode === "ponte" ? "Ponte: sem sinal" : "Conversa: fora do ar", "bad", hl.chat.reason || "");
-    const tasks = hl.tasks.configured ? pill("Tarefas: ligadas", "ok") : pill("Tarefas: não configuradas", "off");
-    const mail = hl.mail.configured ? pill("E-mail: ligado", "ok") : pill("E-mail: não configurado", "off");
-    $("health-pills").replaceChildren(chat, tasks, mail);
-    $("conn-dot").className = "status-dot" + (!hl.chat.configured ? " off" : hl.chat.online ? "" : " bad");
+    const bridge = hl.bridge?.online ? pill("Ponte: conectada", "ok") : pill("Ponte: aguardando conexão", "off");
+    const gateway = hl.bridge?.online && hl.bridge.gateway ? pill("Gateway: verificado", "ok") : pill("Gateway: não verificado", "off");
+    const tasks = hl.executionEnabled ? pill("Rotinas: liberadas", "ok") : pill("Rotinas: aguardando homologação", "off");
+    const mail = hl.mail.configured ? pill("E-mail: configurado", "warn") : pill("E-mail: não configurado", "off");
+    $("health-pills").replaceChildren(bridge, gateway, tasks, mail);
+    $("conn-dot").className = "status-dot" + (hl.bridge?.online ? "" : " off");
+    executionEnabled = hl.executionEnabled === true;
+    $("task-send").disabled = !executionEnabled;
+
   } catch (e) {
+    executionEnabled = false; $("task-send").disabled = true;
     $("health-pills").replaceChildren(h("span", {}, "Não consegui verificar as conexões"));
   }
 }
@@ -659,7 +662,7 @@ $("chat-reset").addEventListener("click", async () => {
 
 // ------------------------------------------------------------ tarefas
 const taskFiles = attachments("taskFile", "taskChips");
-const TASK_LABEL = { queued: ["na fila", "off"], sent: ["enviada", "warn"], running: ["em andamento", "warn"], done: ["concluída", "ok"], error: ["falhou", "bad"], send_failed: ["não enviada", "bad"] };
+const TASK_LABEL = { uncertain: ["resultado incerto — requer conferência", "bad"], skipped: ["não executada", "off"], queued: ["na fila", "off"], sent: ["enviada", "warn"], running: ["em andamento", "warn"], done: ["execução técnica concluída", "ok"], error: ["falhou", "bad"], send_failed: ["não enviada", "bad"] };
 const taskPill = (s) => h("span", { class: "pill task-status " + (TASK_LABEL[s]?.[1] || "off") }, TASK_LABEL[s]?.[0] || s);
 
 $("task-form").addEventListener("submit", async (e) => {
@@ -669,7 +672,19 @@ $("task-form").addEventListener("submit", async (e) => {
   if (taskFiles.hasErrors()) return ($("task-error").textContent = "Remova os anexos com erro antes de enviar.");
   $("task-send").disabled = true;
   try {
-    const out = await api("/api/tasks", { json: { title: $("taskTitle").value.trim(), description: $("taskDesc").value.trim(), routineId: $("taskRoutine").value || undefined, files: taskFiles.ids() } });
+    if (!executionEnabled) throw new Error("Execução ainda não homologada.");
+    const routine = routines.find(r => r.id === $("taskRoutine").value);
+    if (!routine?.on) throw new Error("Escolha uma rotina ligada.");
+    const pendingKey = "torre_pending_routine_request:" + encodeURIComponent($("whoami").textContent);
+    let pending = JSON.parse(localStorage.getItem(pendingKey) || "null");
+    if (pending && (pending.routineId !== routine.id || pending.version !== routine.version)) throw new Error("Há outro pedido sem confirmação. Confira as tarefas antes de solicitar uma nova execução.");
+    if (!pending) {
+      if (!confirm(`Executar a rotina “${routine.name}”? Ela pode consumir IA e realizar as ações previstas no cadastro.`)) return;
+      pending = { requestId: crypto.randomUUID(), routineId: routine.id, version: routine.version };
+      localStorage.setItem(pendingKey, JSON.stringify(pending));
+    }
+    const out = await api("/api/tasks", { json: pending });
+    localStorage.removeItem(pendingKey);
     if (!out.ok) $("task-error").textContent = "A tarefa foi registrada, mas não chegou na Alice: " + out.error;
     $("taskTitle").value = ""; $("taskDesc").value = ""; $("taskRoutine").value = ""; taskFiles.clear();
     await loadTasks();
@@ -678,7 +693,7 @@ $("task-form").addEventListener("submit", async (e) => {
   } catch (err) {
     $("task-error").textContent = err.message;
   } finally {
-    $("task-send").disabled = false;
+    $("task-send").disabled = !executionEnabled;
   }
 });
 $("tasks-refresh").addEventListener("click", loadTasks);
@@ -758,7 +773,7 @@ async function loadRoutines() {
 function renderRoutines() {
   $("onCount").textContent = `${routines.filter((r) => r.on).length} de ${routines.length}`;
   const sel = $("taskRoutine"), keep = sel.value;
-  sel.replaceChildren(h("option", { value: "" }, "— nenhuma —"), ...routines.map((r) => h("option", { value: r.id }, r.name)));
+  sel.replaceChildren(h("option", { value: "" }, "— escolha uma rotina —"), ...routines.map((r) => h("option", { value: r.id }, r.name)));
   sel.value = keep;
 
   if (!routines.length) {
@@ -807,12 +822,14 @@ function routineInfo(r) {
     h("div", { class: "modal-actions" }, closeBtn()));
 }
 
+$("taskRoutine").addEventListener("change", () => { const r = routines.find(r => r.id === $("taskRoutine").value); $("taskTitle").value = r?.name || ""; $("taskDesc").value = r?.description || ""; });
+
 function askRun(r) {
   selectTab("tasks");
   $("taskRoutine").value = r.id;
   $("taskTitle").value = "Executar agora: " + r.name;
   $("taskDesc").value = `Execute agora a rotina "${r.name}" (id ${r.id}), seguindo o passo a passo cadastrado na Torre.` + (r.prompt ? "\n\nInstruções da rotina:\n" + r.prompt : "");
-  $("taskDesc").focus();
+  $("task-send").focus();
 }
 
 // --- editor de rotina (texto simples para passos e conferências)

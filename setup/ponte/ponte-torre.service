@@ -1,24 +1,17 @@
 [Unit]
-Description=Ponte de saída Torre de Controle -> Alice (OpenClaw)
-After=network-online.target
+Description=Ponte de saída da Alice (container isolado previamente preparado)
+After=docker.service network-online.target
+Requires=docker.service
 Wants=network-online.target
+# Não habilitar esta unidade antes de concluir a homologação do README.
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/ponte-torre
-# O systemd lê o ponte.env (chmod 600, dono root) antes de rebaixar os privilégios
-EnvironmentFile=/opt/ponte-torre/ponte.env
-# Ajuste para o caminho do node do servidor (veja: command -v node). Ex.: /usr/local/bin/node
-ExecStart=/usr/local/bin/node /opt/ponte-torre/ponte-torre.mjs
-Restart=always
-RestartSec=10
-# Roda com um usuário temporário sem privilégios
-DynamicUser=yes
-ReadOnlyPaths=/opt/ponte-torre
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
+ExecStart=/usr/bin/docker start --attach alice-torre-bridge
+ExecStop=/usr/bin/docker stop --time 20 alice-torre-bridge
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
