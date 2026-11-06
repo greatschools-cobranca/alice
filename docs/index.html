@@ -845,14 +845,18 @@ async function boot() {
   await setupLogin();
   if (!token()) return showLogin();
   try {
-    const { username } = await api("/api/session");
+    const { username, admin } = await api("/api/session");
+    isAdminUser = admin === true;
     await showDashboard(username);
   } catch (e) {
     if (e.message !== "sessão expirada") showLogin("Não consegui falar com a Torre: " + e.message);
   }
 }
 
+let isAdminUser = false;
 async function showDashboard(username) {
+  try { isAdminUser = (await api("/api/session")).admin === true; } catch (_) { isAdminUser = false; }
+  document.body.classList.toggle("is-admin", isAdminUser);
   $("login-view").hidden = true;
   $("dashboard-view").hidden = false;
   $("whoami").textContent = username.split("@")[0];
@@ -1125,6 +1129,14 @@ const TASK_LABEL = {
   skipped: ["Não executada", "off", "A Alice estava ocupada com outra rotina. Nada foi feito; pode pedir de novo."],
   send_failed: ["Recusada", "bad", "O pedido foi recusado antes de rodar (rotina desligada ou alterada). Nada foi feito."],
 };
+const REASON_TEXT = {
+  busy: "havia outra rotina em execução no OpenClaw",
+  off: "a rotina estava desligada na Torre",
+  version: "a rotina mudou ou o registro dela na VPS ainda não foi homologado (fale com o responsável pela VPS)",
+  gateway: "o OpenClaw da Alice estava indisponível",
+  unknown: "a ponte não conseguiu confirmar o resultado",
+  native_error: "o job do OpenClaw terminou com erro",
+};
 const taskPill = (s) => h("span", { class: "pill task-status " + (TASK_LABEL[s]?.[1] || "off") }, TASK_LABEL[s]?.[0] || s);
 
 /** Mostra por que o botão Executar está travado, quando estiver. */
@@ -1202,6 +1214,7 @@ async function openTask(id) {
       h("div", { class: "sub" }, `Pedido por ${t.createdBy} em ${fmtDate(t.createdAt)}`),
       taskPill(t.status),
       h("p", { style: "margin:10px 0 0" }, TASK_LABEL[t.status]?.[2] || ""),
+      t.evidence?.reason && REASON_TEXT[t.evidence.reason] ? h("p", { class: "line" }, "Motivo: " + REASON_TEXT[t.evidence.reason]) : null,
       t.routineName ? h("p", { class: "line" }, "Rotina: " + t.routineName) : null,
       t.description ? [h("div", { class: "block-label" }, "Pedido"), h("pre", { class: "box" }, t.description)] : null,
       t.files?.length ? [h("div", { class: "block-label" }, "Arquivos enviados"), fileLinks(t.files)] : null,
@@ -1255,6 +1268,8 @@ function renderRoutines() {
     $("routineList").replaceChildren(h("div", { class: "empty" }, "Nenhuma rotina cadastrada. Use “Importar JSON” com o arquivo rotinas-seed.json ou “Nova rotina”."));
     return;
   }
+  $("routine-new").hidden = !isAdminUser;
+  $("routine-import").closest("label").hidden = !isAdminUser;
   $("routineList").replaceChildren(...routines.map((r) => {
     const sw = h("button", { class: "switch" + (r.on ? " active" : ""), role: "switch", "aria-checked": String(r.on), "aria-label": (r.on ? "Desligar " : "Ligar ") + r.name });
     sw.addEventListener("click", async () => {
@@ -1284,7 +1299,7 @@ function renderRoutines() {
       h("div", { class: "btns" },
         runBtn,
         h("button", { class: "btn small", type: "button", onclick: () => routineInfo(r) }, "Ver passo a passo"),
-        h("button", { class: "btn small", type: "button", onclick: () => routineEditor(r) }, "Editar")));
+        isAdminUser ? h("button", { class: "btn small", type: "button", onclick: () => routineEditor(r) }, "Editar") : null));
   }));
 }
 
@@ -1428,9 +1443,11 @@ async function loadPending() {
         h("div", { class: "actions", style: "align-items:center" }, h("span", { class: "pill warn" }, p.type === "create" ? "Nova rotina" : "Edição"), h("h3", { style: "font-size:.92rem" }, title)),
         h("div", { class: "line", title: "Identificador: " + p.routineId }, `Proposta da Alice ${fmtAgo(p.proposedAt)}`),
         h("div", { class: "preview" }, fields),
-        h("div", { class: "actions", style: "margin-top:12px" },
-          h("button", { class: "btn small primary", type: "button", onclick: act("approve") }, "Aprovar"),
-          h("button", { class: "btn small danger", type: "button", onclick: act("reject") }, "Rejeitar")));
+        isAdminUser
+          ? h("div", { class: "actions", style: "margin-top:12px" },
+              h("button", { class: "btn small primary", type: "button", onclick: act("approve") }, "Aprovar"),
+              h("button", { class: "btn small danger", type: "button", onclick: act("reject") }, "Rejeitar"))
+          : h("p", { class: "line", style: "margin-top:10px" }, "Aguardando aprovação de uma administradora."));
     }));
   } catch (_) { /* silencioso: não trava o resto do painel */ }
 }

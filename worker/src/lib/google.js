@@ -37,6 +37,16 @@ export function allowedEmails(env) {
     .filter(Boolean);
 }
 
+/** Administradoras: podem incluir, editar, excluir e importar rotinas e aprovar propostas. */
+export function adminEmails(env) {
+  return String(env.ADMIN_EMAILS || "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+export function isAdmin(env, user) {
+  const list = adminEmails(env);
+  if (!list.length) return true; // transição: sem ADMIN_EMAILS cadastrado, todos seguem podendo (comportamento anterior)
+  return list.includes(String(user || "").toLowerCase());
+}
+
 /** E-mail do domínio da empresa e presente na lista. */
 export function emailAuthorized(env, email) {
   const e = String(email || "").toLowerCase();
