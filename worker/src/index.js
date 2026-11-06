@@ -33,7 +33,8 @@ import { fila, Fila } from "./lib/fila.js";
 import { syncQueuedTask } from "./lib/delivery.js";
 import { routeBridge, controlSnapshot } from "./lib/bridge-api.js";
 import { auditRequest } from "./lib/bridge-audit.js";
-import { verifyGoogleIdToken, googleConfigured, passwordLoginEnabled, allowedDomain } from "./lib/google.js";
+import { verifyGoogleIdToken, googleConfigured, passwordLoginEnabled, allowedDomain, emailCodeConfigured } from "./lib/google.js";
+import { requestCode, verifyCode } from "./lib/emailcode.js";
 import { routineVersion, BridgeError, bridgeValue } from "./lib/bridge-state.js";
 import { migrateLegacy } from "./lib/migrate.js";
 
@@ -456,8 +457,30 @@ async function handle(request, env, ctx) {
   if (path === "/api/auth/config" && method === "GET") {
     return json({
       google: googleConfigured(env) ? { clientId: env.GOOGLE_CLIENT_ID, domain: allowedDomain(env) } : null,
+      emailCode: emailCodeConfigured(env) ? { domain: allowedDomain(env) } : null,
       password: passwordLoginEnabled(env),
     });
+  }
+
+  // Login por código no e-mail: 1) pedir o código
+  if (path === "/api/login/code/request" && method === "POST") {
+    if (!emailCodeConfigured(env)) throw new HttpError(503, "login por código ainda não configurado");
+    const body = await readJson(request);
+    const out = await requestCode(env, body.email);
+    if (out.outcome === "denied") {
+      await record(env, ctx, { type: "login_denied", severity: "warn", actor: "torre", summary: `Pedido de código de acesso para ${clip(out.email, 80)}, que não está na lista autorizada` });
+    }
+    // resposta igual nos dois casos: não revela quem está na lista
+    return json({ ok: true, message: "Se o e-mail estiver autorizado, o código chega em instantes. Confira também a caixa de spam." });
+  }
+
+  // Login por código no e-mail: 2) conferir o código
+  if (path === "/api/login/code/verify" && method === "POST") {
+    if (!emailCodeConfigured(env)) throw new HttpError(503, "login por código ainda não configurado");
+    const body = await readJson(request);
+    const email = await verifyCode(env, body.email, body.code);
+    await record(env, ctx, { type: "login", actor: email, summary: `${email} entrou na Torre (código por e-mail)` });
+    return json({ token: await makeSessionToken(env, email, "email"), username: email, expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
   }
 
   if (path === "/api/login/google" && method === "POST") {
@@ -476,7 +499,7 @@ async function handle(request, env, ctx) {
   }
 
   if (path === "/api/login" && method === "POST") {
-    if (!passwordLoginEnabled(env)) throw new HttpError(403, "o acesso agora é pelo botão “Entrar com Google”");
+    if (!passwordLoginEnabled(env)) throw new HttpError(403, "o acesso agora é pelo e-mail da empresa");
     const body = await readJson(request);
     const username = await login(env, body.username, body.password, (u) =>
       record(env, ctx, { type: "login_locked", severity: "warn", actor: "torre", summary: `Login de "${clip(u, 40)}" bloqueado por 15 min após 5 senhas erradas` }, { alert: true })

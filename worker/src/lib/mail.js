@@ -6,13 +6,22 @@ export function mailConfigured(env) {
   return !!(env.MAIL_WEBHOOK_URL && env.MAIL_WEBHOOK_SECRET && env.AUDIT_EMAIL_TO);
 }
 
-export async function sendMail(env, subject, html) {
-  if (!mailConfigured(env)) return { ok: false, error: "e-mail não configurado" };
+/** Envio para um destinatário específico (ex.: código de acesso). */
+export async function sendMailTo(env, to, subject, html) {
+  return sendMail(env, subject, html, to);
+}
+
+export function mailTransportConfigured(env) {
+  return !!(env.MAIL_WEBHOOK_URL && env.MAIL_WEBHOOK_SECRET);
+}
+
+export async function sendMail(env, subject, html, to = env.AUDIT_EMAIL_TO) {
+  if (!mailTransportConfigured(env) || !to) return { ok: false, error: "e-mail não configurado" };
   try {
     const res = await fetch(env.MAIL_WEBHOOK_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ secret: env.MAIL_WEBHOOK_SECRET, to: env.AUDIT_EMAIL_TO, subject, html }),
+      body: JSON.stringify({ secret: env.MAIL_WEBHOOK_SECRET, to, subject, html }),
       redirect: "follow",
     });
     const text = await res.text();

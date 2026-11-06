@@ -16,8 +16,14 @@ export function googleConfigured(env) {
   return !!env.GOOGLE_CLIENT_ID;
 }
 
+/** Login por código no e-mail: precisa da lista de autorizados e do envio de e-mail (Apps Script). */
+export function emailCodeConfigured(env) {
+  return allowedEmails(env).length > 0 && !!(env.MAIL_WEBHOOK_URL && env.MAIL_WEBHOOK_SECRET);
+}
+
+/** A senha só vale enquanto nenhum login forte (Google ou código) estiver configurado, ou em emergência. */
 export function passwordLoginEnabled(env) {
-  return !googleConfigured(env) || env.ALLOW_PASSWORD_LOGIN === "true";
+  return (!googleConfigured(env) && !emailCodeConfigured(env)) || env.ALLOW_PASSWORD_LOGIN === "true";
 }
 
 export function allowedDomain(env) {

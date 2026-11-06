@@ -29,6 +29,28 @@ export class Fila extends DurableObject {
   async bridgeGet(id) { return this.bridge.get(id); }
   // ---------- histórico da conversa (usado nos dois modos) ----------
 
+  // ---------- códigos de acesso por e-mail (consistência imediata para contar tentativas) ----------
+  async otpGet(email) {
+    const rec = await this.ctx.storage.get(`otp:${email}`);
+    if (rec && rec.exp < Date.now()) { await this.ctx.storage.delete(`otp:${email}`); return null; }
+    return rec || null;
+  }
+  async otpSet(email, rec) {
+    await this.ctx.storage.put(`otp:${email}`, rec);
+  }
+  async otpDelete(email) {
+    await this.ctx.storage.delete(`otp:${email}`);
+  }
+  /** Quantos códigos este e-mail pediu na janela atual (limite de envio). */
+  async otpCountRequest(email, windowMs) {
+    const key = `otpreq:${email}`;
+    const now = Date.now();
+    const list = ((await this.ctx.storage.get(key)) || []).filter((t) => now - t < windowMs);
+    list.push(now);
+    await this.ctx.storage.put(key, list);
+    return list.length;
+  }
+
   async getHistory(user) {
     return (await this.ctx.storage.get(`chat:${user}`)) || [];
   }
