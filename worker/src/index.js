@@ -33,6 +33,7 @@ import { fila, Fila } from "./lib/fila.js";
 import { syncQueuedTask } from "./lib/delivery.js";
 import { routeBridge, controlSnapshot } from "./lib/bridge-api.js";
 import { auditRequest } from "./lib/bridge-audit.js";
+import { verifyGoogleIdToken, googleConfigured, passwordLoginEnabled, allowedDomain } from "./lib/google.js";
 import { routineVersion, BridgeError, bridgeValue } from "./lib/bridge-state.js";
 import { migrateLegacy } from "./lib/migrate.js";
 
@@ -451,7 +452,31 @@ async function handle(request, env, ctx) {
     return json({ ...snapshot, routines: snapshot.routines.map(({ id, on, version }) => ({ id, on, version })) }, 200, { "Cache-Control": "no-store, max-age=0" });
   }
 
+  // Qual forma de login o painel deve mostrar (público; o client id do Google não é segredo)
+  if (path === "/api/auth/config" && method === "GET") {
+    return json({
+      google: googleConfigured(env) ? { clientId: env.GOOGLE_CLIENT_ID, domain: allowedDomain(env) } : null,
+      password: passwordLoginEnabled(env),
+    });
+  }
+
+  if (path === "/api/login/google" && method === "POST") {
+    const body = await readJson(request);
+    let who;
+    try {
+      who = await verifyGoogleIdToken(env, body.credential);
+    } catch (err) {
+      if (err.denied) {
+        await record(env, ctx, { type: "login_denied", severity: "warn", actor: "torre", summary: `Tentativa de acesso de ${clip(err.denied, 80)}, que não está na lista autorizada` });
+      }
+      throw err;
+    }
+    await record(env, ctx, { type: "login", actor: who.email, summary: `${who.email} entrou na Torre (Google)` });
+    return json({ token: await makeSessionToken(env, who.email, "google"), username: who.email, name: who.name, expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000 });
+  }
+
   if (path === "/api/login" && method === "POST") {
+    if (!passwordLoginEnabled(env)) throw new HttpError(403, "o acesso agora é pelo botão “Entrar com Google”");
     const body = await readJson(request);
     const username = await login(env, body.username, body.password, (u) =>
       record(env, ctx, { type: "login_locked", severity: "warn", actor: "torre", summary: `Login de "${clip(u, 40)}" bloqueado por 15 min após 5 senhas erradas` }, { alert: true })

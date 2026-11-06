@@ -22,6 +22,7 @@ crons = ["*/30 * * * *"]
 [vars]
 ROUTINE_EXECUTION_ENABLED = "true"  # liberado após homologação na VPS (ponte em mode=active)
 ALLOWED_ORIGINS = "https://greatschools-cobranca.github.io"
+ALLOWED_DOMAIN = "greatschools.com.br"   # login com Google só para contas deste domínio
 PANEL_URL = "https://greatschools-cobranca.github.io/alice/"
 OPENCLAW_AGENT_ID = "main"
 

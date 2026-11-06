@@ -416,6 +416,7 @@
     .agent-name{ margin-top:0; }
     .agent-status{ margin-top:2px; }
   }
+  .gsi-btn{ min-height:44px; display:flex; }
 </style>
 </head>
 <body>
@@ -429,12 +430,18 @@
         <img class="avatar" src="assets/alice.jpg" alt="" width="56" height="56">
         <div><h1>Torre de Controle</h1><p class="sub">Rotinas da Alice · Cobrança</p></div>
       </div>
-      <form id="login-form">
+      <!-- Login com Google (aparece quando GOOGLE_CLIENT_ID está configurado) -->
+      <div id="google-area" hidden>
+        <div id="gsi-btn" class="gsi-btn"></div>
+        <p class="hint" id="google-hint" style="margin:14px 0 0">Use sua conta Google da empresa. O acesso é liberado só para e-mails autorizados.</p>
+      </div>
+      <div class="error-msg" id="login-error" role="alert" style="margin:14px 0 0"></div>
+      <!-- Login por senha (só enquanto o Google não estiver configurado, ou em emergência) -->
+      <form id="login-form" hidden style="margin-top:8px">
         <label for="username">Usuário</label>
         <input type="text" id="username" autocomplete="username" required>
         <label for="password">Senha</label>
         <input type="password" id="password" autocomplete="current-password" required>
-        <div class="error-msg" id="login-error" role="alert"></div>
         <button type="submit" class="btn primary block" id="login-btn">Entrar</button>
       </form>
     </div>
@@ -730,10 +737,52 @@ $("login-form").addEventListener("submit", async (e) => {
 $("logout-btn").addEventListener("click", () => {
   localStorage.removeItem(TOKEN_KEY);
   $("chatLog").replaceChildren();
+  if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
   showLogin();
 });
 
+// ---- Login com Google (Google Identity Services)
+function loadGoogleButton(g) {
+  const s = document.createElement("script");
+  s.src = "https://accounts.google.com/gsi/client";
+  s.async = true;
+  s.onload = () => {
+    google.accounts.id.initialize({
+      client_id: g.clientId,
+      callback: onGoogleCredential,
+      hd: g.domain,              // sugere a conta da empresa no seletor do Google
+      ux_mode: "popup",
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+    google.accounts.id.renderButton($("gsi-btn"), { theme: "outline", size: "large", shape: "pill", text: "signin_with", locale: "pt-BR", width: 300 });
+  };
+  s.onerror = () => { $("login-error").textContent = "Não consegui carregar o login do Google. Verifique a internet e atualize a página."; };
+  document.head.append(s);
+}
+
+async function onGoogleCredential(resp) {
+  $("login-error").textContent = "";
+  try {
+    const data = await api("/api/login/google", { json: { credential: resp.credential } });
+    localStorage.setItem(TOKEN_KEY, data.token);
+    await showDashboard(data.username);
+  } catch (err) {
+    $("login-error").textContent = err.message.charAt(0).toUpperCase() + err.message.slice(1) + ".";
+  }
+}
+
+/** Pergunta à Torre qual forma de login usar (Google e/ou senha). */
+async function setupLogin() {
+  let cfg = { google: null, password: true };
+  try { cfg = await (await fetch(API_BASE + "/api/auth/config")).json(); } catch (_) { /* mantém senha */ }
+  $("login-form").hidden = !cfg.password;
+  $("google-area").hidden = !cfg.google;
+  if (cfg.google) loadGoogleButton(cfg.google);
+}
+
 async function boot() {
+  await setupLogin();
   if (!token()) return showLogin();
   try {
     const { username } = await api("/api/session");
@@ -746,7 +795,7 @@ async function boot() {
 async function showDashboard(username) {
   $("login-view").hidden = true;
   $("dashboard-view").hidden = false;
-  $("whoami").textContent = username;
+  $("whoami").textContent = username.split("@")[0];
   const hora = new Date().getHours();
   const primeiro = username.split(/[._@\s-]/)[0] || username;
   const nome = primeiro.charAt(0).toUpperCase() + primeiro.slice(1);
