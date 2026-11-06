@@ -1,5 +1,6 @@
 // Login, sessão (token assinado com HMAC) e autenticação da Alice.
 import { HttpError, safeEqual, randomHex } from "./util.js";
+import { emailAuthorized, passwordLoginEnabled } from "./google.js";
 
 export const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12h
 const PBKDF2_ITERATIONS = 20000; // limitado pelo orçamento de CPU do plano gratuito do Workers
@@ -76,9 +77,10 @@ function users(env) {
   }
 }
 
-export async function makeSessionToken(env, username) {
+/** via: "google" ou "senha". Sessões por senha só valem enquanto o login por senha estiver liberado. */
+export async function makeSessionToken(env, username, via = "senha") {
   const secret = requireSecret(env);
-  const payload = b64url(new TextEncoder().encode(JSON.stringify({ u: username, exp: Date.now() + SESSION_TTL_SECONDS * 1000 })));
+  const payload = b64url(new TextEncoder().encode(JSON.stringify({ u: username, v: via, exp: Date.now() + SESSION_TTL_SECONDS * 1000 })));
   return `${payload}.${await hmac(secret, "session:" + payload)}`;
 }
 
@@ -91,6 +93,11 @@ async function verifySessionToken(env, token) {
   try {
     const data = JSON.parse(b64urlDecodeToString(payload));
     if (typeof data.exp !== "number" || data.exp < Date.now()) return null;
+    if (data.v === "google") {
+      // e-mail retirado da lista perde o acesso na hora
+      return emailAuthorized(env, data.u) ? data.u : null;
+    }
+    if (!passwordLoginEnabled(env)) return null; // com Google ativo, sessões antigas por senha deixam de valer
     if (!users(env).some((u) => u.username === data.u)) return null; // usuário removido perde acesso
     return data.u;
   } catch {

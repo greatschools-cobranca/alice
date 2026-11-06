@@ -55,11 +55,15 @@ jobs:
           S_MAIL_WEBHOOK_URL: ${{ secrets.MAIL_WEBHOOK_URL }}
           S_MAIL_WEBHOOK_SECRET: ${{ secrets.MAIL_WEBHOOK_SECRET }}
           S_AUDIT_EMAIL_TO: ${{ secrets.AUDIT_EMAIL_TO }}
+          S_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          S_ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          S_ALLOW_PASSWORD_LOGIN: ${{ secrets.ALLOW_PASSWORD_LOGIN }}
         run: |
           for name in JWT_SECRET USERS_JSON ALICE_API_KEY BRIDGE_API_KEY ROUTINE_WEBHOOK_URL \
                       OPENCLAW_BASE_URL OPENCLAW_GATEWAY_TOKEN OPENCLAW_HOOKS_TOKEN \
                       CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET \
-                      MAIL_WEBHOOK_URL MAIL_WEBHOOK_SECRET AUDIT_EMAIL_TO; do
+                      MAIL_WEBHOOK_URL MAIL_WEBHOOK_SECRET AUDIT_EMAIL_TO \
+                      GOOGLE_CLIENT_ID ALLOWED_EMAILS ALLOW_PASSWORD_LOGIN; do
             var="S_$name"
             value="${!var}"
             if [ -n "$value" ]; then
