@@ -33,7 +33,7 @@ import { fila, Fila } from "./lib/fila.js";
 import { syncQueuedTask } from "./lib/delivery.js";
 import { routeBridge, controlSnapshot } from "./lib/bridge-api.js";
 import { auditRequest } from "./lib/bridge-audit.js";
-import { verifyGoogleIdToken, googleConfigured, passwordLoginEnabled, allowedDomain, emailCodeConfigured } from "./lib/google.js";
+import { verifyGoogleIdToken, googleConfigured, passwordLoginEnabled, allowedDomain, emailCodeConfigured, isAdmin } from "./lib/google.js";
 import { requestCode, verifyCode } from "./lib/emailcode.js";
 import { routineVersion, BridgeError, bridgeValue } from "./lib/bridge-state.js";
 import { migrateLegacy } from "./lib/migrate.js";
@@ -63,7 +63,14 @@ async function routeUser(request, env, ctx, url, path, method) {
   const base = apiBase(request, env);
   let m;
 
-  if (path === "/api/session" && method === "GET") return json({ username: user });
+  if (path === "/api/session" && method === "GET") return json({ username: user, admin: isAdmin(env, user) });
+
+  // Inclusão, edição, exclusão, importação e aprovação de propostas: só administradoras
+  const ADMIN_ONLY = /^\/api\/routines\/(save|import|[a-z0-9-]+\/delete|pending\/[\w-]+\/(approve|reject))$/;
+  if (method === "POST" && ADMIN_ONLY.test(path) && !isAdmin(env, user)) {
+    await record(env, ctx, { type: "permission_denied", severity: "warn", actor: user, summary: `${user} tentou alterar rotinas sem permissão (${path.replace("/api/routines/", "")})` });
+    throw new HttpError(403, "somente as administradoras da Torre podem incluir, editar ou excluir rotinas");
+  }
 
   if (path === "/api/health" && method === "GET") {
     const conn = await ping(env);
