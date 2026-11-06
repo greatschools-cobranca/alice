@@ -6,7 +6,7 @@
  *  2. Cole este arquivo no lugar do Code.gs.
  *  3. Configurações do projeto (engrenagem) → Propriedades do script → adicione:
  *       MAIL_SECRET  = (mesmo valor do segredo MAIL_WEBHOOK_SECRET da Torre)
- *       ALLOWED_TO   = e-mails que podem receber, separados por vírgula
+ *       ALLOWED_TO   = e-mails que podem receber (auditoria + cada pessoa com acesso à Torre), separados por vírgula
  *  4. Implantar → Nova implantação → Tipo "App da Web" →
  *       Executar como: "Eu" (a conta da Alice) · Quem pode acessar: "Qualquer pessoa".
  *  5. Autorize o acesso ao Gmail e copie a URL que termina em /exec → segredo MAIL_WEBHOOK_URL.

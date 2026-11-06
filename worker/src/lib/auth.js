@@ -93,7 +93,7 @@ async function verifySessionToken(env, token) {
   try {
     const data = JSON.parse(b64urlDecodeToString(payload));
     if (typeof data.exp !== "number" || data.exp < Date.now()) return null;
-    if (data.v === "google") {
+    if (data.v === "google" || data.v === "email") {
       // e-mail retirado da lista perde o acesso na hora
       return emailAuthorized(env, data.u) ? data.u : null;
     }

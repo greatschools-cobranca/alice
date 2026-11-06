@@ -42,7 +42,7 @@
 
   /* ===== formulários e botões ===== */
   label{ display:block; font-size:0.84rem; font-weight:500; color:var(--text-muted); margin-bottom:6px; }
-  input[type="text"], input[type="password"], input[type="time"], input[type="search"], textarea, select{
+  input[type="text"], input[type="email"], input[type="password"], input[type="time"], input[type="search"], textarea, select{
     width:100%; padding:11px 14px; border-radius:10px; border:1px solid var(--border);
     background:var(--surface); color:var(--text); font-size:0.95rem; margin-bottom:14px; font-family:inherit;
   }
@@ -435,6 +435,24 @@
         <div id="gsi-btn" class="gsi-btn"></div>
         <p class="hint" id="google-hint" style="margin:14px 0 0">Use sua conta Google da empresa. O acesso é liberado só para e-mails autorizados.</p>
       </div>
+      <!-- Login por código no e-mail (aparece quando ALLOWED_EMAILS + envio de e-mail estão configurados) -->
+      <div id="code-area" hidden>
+        <form id="code-request-form">
+          <label for="code-email">E-mail da empresa</label>
+          <input type="email" id="code-email" autocomplete="email" inputmode="email" placeholder="nome@greatschools.com.br" required>
+          <button type="submit" class="btn primary block" id="code-request-btn">Enviar código</button>
+        </form>
+        <form id="code-verify-form" hidden>
+          <p class="sub" id="code-sent-msg" style="margin:0 0 16px"></p>
+          <label for="code-input">Código de 6 dígitos</label>
+          <input type="text" id="code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="7" pattern="[0-9 ]*" placeholder="000000" required style="font-size:1.4rem;letter-spacing:.35em;text-align:center">
+          <button type="submit" class="btn primary block" id="code-verify-btn">Entrar</button>
+          <p style="margin:14px 0 0;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <button type="button" class="linkish" id="code-resend">Reenviar código</button>
+            <button type="button" class="linkish" id="code-change">Usar outro e-mail</button>
+          </p>
+        </form>
+      </div>
       <div class="error-msg" id="login-error" role="alert" style="margin:14px 0 0"></div>
       <!-- Login por senha (só enquanto o Google não estiver configurado, ou em emergência) -->
       <form id="login-form" hidden style="margin-top:8px">
@@ -778,8 +796,50 @@ async function setupLogin() {
   try { cfg = await (await fetch(API_BASE + "/api/auth/config")).json(); } catch (_) { /* mantém senha */ }
   $("login-form").hidden = !cfg.password;
   $("google-area").hidden = !cfg.google;
+  $("code-area").hidden = !cfg.emailCode;
   if (cfg.google) loadGoogleButton(cfg.google);
 }
+
+// ---- Login por código no e-mail
+let codeEmail = "";
+async function requestLoginCode() {
+  $("login-error").textContent = "";
+  const email = $("code-email").value.trim().toLowerCase();
+  $("code-request-btn").disabled = true; $("code-resend").disabled = true;
+  try {
+    const out = await api("/api/login/code/request", { json: { email } });
+    codeEmail = email;
+    $("code-sent-msg").textContent = `${out.message} Enviado para ${email}.`;
+    $("code-request-form").hidden = true; $("code-verify-form").hidden = false;
+    $("code-input").value = ""; $("code-input").focus();
+  } catch (err) {
+    $("login-error").textContent = err.message.charAt(0).toUpperCase() + err.message.slice(1) + ".";
+  } finally {
+    $("code-request-btn").disabled = false;
+    setTimeout(() => ($("code-resend").disabled = false), 30000); // evita reenvio em sequência
+  }
+}
+$("code-request-form").addEventListener("submit", (e) => { e.preventDefault(); requestLoginCode(); });
+$("code-resend").addEventListener("click", () => { $("code-email").value = codeEmail; requestLoginCode(); });
+$("code-change").addEventListener("click", () => {
+  $("code-verify-form").hidden = true; $("code-request-form").hidden = false; $("login-error").textContent = ""; $("code-email").focus();
+});
+$("code-verify-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("login-error").textContent = "";
+  $("code-verify-btn").disabled = true;
+  try {
+    const data = await api("/api/login/code/verify", { json: { email: codeEmail, code: $("code-input").value } });
+    localStorage.setItem(TOKEN_KEY, data.token);
+    $("code-verify-form").hidden = true; $("code-request-form").hidden = false; $("code-input").value = "";
+    await showDashboard(data.username);
+  } catch (err) {
+    $("login-error").textContent = err.message.charAt(0).toUpperCase() + err.message.slice(1) + ".";
+    if (/peça um novo/.test(err.message)) { $("code-verify-form").hidden = true; $("code-request-form").hidden = false; }
+  } finally {
+    $("code-verify-btn").disabled = false;
+  }
+});
 
 async function boot() {
   await setupLogin();
